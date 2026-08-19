@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="meta.title">Primecuts | Startpagina</title>
+    <!-- Tailwind CSS Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        bebas: ['"Bebas Neue"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        ink: '#0a0a0b',
+                        panel: '#111113',
+                        panel2: '#18181b',
+                        line: 'rgba(255,255,255,0.10)',
+                        accent: {
+                            DEFAULT: '#e5342a',
+                            dark: '#a5241d',
+                            light: '#ff4c40'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+        body {
+            background-color: #000;
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        /* ============ Chrome / jersey display type ============ */
+        .chrome-text {
+            background: linear-gradient(180deg, #ffffff 0%, #e7e8ea 22%, #9a9ca1 48%, #cfd0d4 62%, #ffffff 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 2px 0 rgba(0,0,0,0.35);
+        }
+        .slant { display: inline-block; transform: skewX(-6deg); }
+
+        /* ============ Barber-pole stripe rule ============ */
+        .stripe-rule {
+            height: 6px;
+            width: 100%;
+            background: repeating-linear-gradient(-55deg, #e5342a 0 22px, #ffffff 22px 26px, #e5342a 26px 48px, #0a0a0a 48px 52px);
+            opacity: 0.9;
+        }
+
+        /* ============ Grain overlay ============ */
+        .grain {
+            position: fixed; inset: 0; pointer-events: none; z-index: 200; opacity: .045; mix-blend-mode: overlay;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+
+        /* ============ Jersey / glass service card ============ */
+        .glass-service-card {
+            background: rgba(15, 15, 15, 0.4);
+            backdrop-filter: blur(12px) saturate(180%);
+            -webkit-backdrop-filter: blur(12px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.03), 0 10px 30px rgba(0,0,0,0.5);
+            transition: all 0.4s ease-in-out;
+            overflow: hidden;
+            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%);
+        }
+        .glass-service-card::after {
+            content: '';
+            position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: linear-gradient(135deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.05) 40%, rgba(255,255,255,0.02) 60%, rgba(255,255,255,0) 100%);
+            transform: rotate(30deg);
+            transition: all 0.6s ease-in-out;
+            pointer-events: none;
+        }
+        .glass-service-card:hover {
+            border: 1px solid rgba(229, 52, 42, 0.55);
+            backdrop-filter: blur(20px) saturate(200%);
+            transform: translateY(-6px);
+            box-shadow: inset 0 0 25px rgba(255, 255, 255, 0.05), 0 20px 45px -10px rgba(0,0,0,0.7);
+        }
+        .glass-service-card:hover::after { left: 100%; top: 100%; }
+        .glass-service-card.featured { border-color: rgba(229, 52, 42, 0.45); }
+        .ribbon {
+            position: absolute; top: 16px; right: -34px; transform: rotate(45deg);
+            background: #e5342a; color: #fff; font-family: 'JetBrains Mono', monospace;
+            font-size: 9px; font-weight: 700; letter-spacing: .12em; padding: 4px 42px;
+            z-index: 10;
+        }
+
+        /* ============ Buttons ============ */
+        .btn-corner {
+            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+        }
+
+        /* ============ Gallery textures ============ */
+        .tex-a { background: repeating-linear-gradient(90deg, rgba(255,255,255,0.4) 0 2px, transparent 2px 14px), linear-gradient(160deg,#1c1c1f,#0a0a0b); }
+        .tex-b { background: radial-gradient(circle at 30% 20%, rgba(229,52,42,0.45), transparent 55%), linear-gradient(200deg,#19191b,#0a0a0b 70%); }
+        .tex-c { background: repeating-linear-gradient(115deg, rgba(255,255,255,0.3) 0 1.5px, transparent 1.5px 22px), linear-gradient(160deg,#141416,#0a0a0b); }
+        .tex-d { background: repeating-radial-gradient(circle at 50% -10%, rgba(229,52,42,0.35) 0 2px, transparent 2px 26px), linear-gradient(200deg,#1c1416,#0a0a0b 75%); }
+
+        .reveal { opacity: 0; transform: translateY(24px); transition: opacity .8s cubic-bezier(.16,.8,.24,1), transform .8s cubic-bezier(.16,.8,.24,1); }
+        .reveal.in { opacity: 1; transform: none; }
+
+        /* ============ Mobile nav ============ */
+        .hamburger-line {
+            transition: transform .3s ease, opacity .3s ease;
+            transform-origin: center;
+        }
+        #hamburgerBtn.is-open .line-top { transform: translateY(6px) rotate(45deg); }
+        #hamburgerBtn.is-open .line-mid { opacity: 0; }
+        #hamburgerBtn.is-open .line-bot { transform: translateY(-6px) rotate(-45deg); }
+
+        #mobileMenu {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height .4s cubic-bezier(.16,.8,.24,1);
+        }
+        #mobileMenu.is-open { max-height: 480px; }
+
+        /* ============ Language switcher ============ */
+        #langChevron { transition: transform .2s ease; }
+        #langChevron.rotate-180 { transform: rotate(180deg); }
+    </style>
+</head>
+<body class="font-sans antialiased text-white bg-black">
+
+<div class="grain"></div>
+<div class="stripe-rule"></div>
+
+<!-- =======================
+         1. HERO SECTION & NAV
+    ======================== -->
+    <div class="relative w-full h-screen min-h-[600px] bg-neutral-900 overflow-hidden">
+
+        <!-- Navigation -->
+        <nav id="siteNav" class="fixed top-0 left-0 w-full z-30 transition-all duration-300">
+            <div class="px-6 md:px-12 py-5 flex justify-between items-center">
+                <a href="index.html" class="flex items-center gap-2 transition-transform duration-300 hover:scale-105">
+                    <img src="./image/PrimeCuts.png" alt="Primecuts Logo" class="h-10 md:h-12 w-auto drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
+                </a>
+
+                <!-- Desktop links -->
+                <div class="hidden md:flex items-center gap-4 lg:gap-8 text-sm font-semibold tracking-wide uppercase text-white/70">
+                    <a href="index.html" data-i18n="nav.home" class="relative inline-block transition-all duration-300 hover:text-white after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-accent after:transition-all after:duration-300 hover:after:w-full">
+                        Home
+                    </a>
+                    <a href="appointment.html" data-i18n="nav.book" class="relative inline-block transition-all duration-300 hover:text-white after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-accent after:transition-all after:duration-300 hover:after:w-full">
+                        Afspraak Maken
+                    </a>
+                    <a href="appointment.html" data-i18n="nav.bookNow" class="btn-corner bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white font-bold text-xs uppercase tracking-wider px-5 lg:px-6 py-3 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-8px_rgba(229,52,42,0.55)]">
+                        Boek Nu
+                    </a>
+
+                    <!-- Language Switcher -->
+                    <div class="relative normal-case" id="langSwitcher">
+                        <button id="langBtn" type="button" aria-haspopup="true" aria-expanded="false" class="flex items-center gap-2 font-semibold text-white/70 hover:text-white transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4 shrink-0">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.6 9h16.8M3.6 15h16.8M11.5 3c-2.2 2.4-3.5 5.6-3.5 9s1.3 6.6 3.5 9M12.5 3c2.2 2.4 3.5 5.6 3.5 9s-1.3 6.6-3.5 9" />
+                            </svg>
+                            <span class="lang-current-label hidden lg:inline">Nederlands</span>
+                            <svg id="langChevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5 shrink-0">
+                                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.293l3.71-4.06a.75.75 0 111.08 1.04l-4.25 4.65a.75.75 0 01-1.08 0l-4.25-4.65a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                        <div id="langMenu" class="hidden absolute right-0 mt-3 w-40 bg-panel border border-white/10 rounded-xl shadow-2xl py-2 z-50">
+                            <button type="button" class="lang-choice w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-white/80 hover:bg-white/5 hover:text-white transition" data-lang="nl">
+                                Nederlands
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="check-icon w-4 h-4 text-accent hidden">
+                                    <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                            <button type="button" class="lang-choice w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-white/80 hover:bg-white/5 hover:text-white transition" data-lang="en">
+                                English
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="check-icon w-4 h-4 text-accent hidden">
+                                    <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mobile hamburger -->
+                <button id="hamburgerBtn" aria-label="Menu openen/sluiten" aria-expanded="false" class="md:hidden relative w-10 h-10 flex flex-col justify-center items-center gap-[6px] z-40">
+                    <span class="hamburger-line line-top block w-7 h-0.5 bg-white"></span>
+                    <span class="hamburger-line line-mid block w-7 h-0.5 bg-white"></span>
+                    <span class="hamburger-line line-bot block w-7 h-0.5 bg-white"></span>
+                </button>
+            </div>
+
+            <!-- Mobile menu panel -->
+            <div id="mobileMenu" class="md:hidden bg-black/95 backdrop-blur-md border-t border-white/10">
+                <div class="flex flex-col px-6 py-6 gap-1 text-sm font-semibold tracking-wide uppercase text-white/70">
+                    <a href="index.html" data-i18n="nav.home" class="py-3 border-b border-white/10 transition-colors duration-300 hover:text-accent">
+                        Home
+                    </a>
+                    <a href="appointment.html" data-i18n="nav.book" class="py-3 border-b border-white/10 transition-colors duration-300 hover:text-accent">
+                        Afspraak Maken
+                    </a>
+                    <a href="appointment.html" data-i18n="nav.bookNow" class="btn-corner mt-4 text-center bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white font-bold text-xs uppercase tracking-wider px-6 py-4 transition-all duration-300">
+                        Boek Nu
+                    </a>
+                    <div class="flex items-center gap-3 pt-5 mt-4 border-t border-white/10 normal-case">
+                        <button type="button" class="lang-choice lang-choice-mobile flex-1 py-2.5 rounded-lg border border-white/15 text-white/60 text-xs font-semibold tracking-wide transition" data-lang="nl">Nederlands</button>
+                        <button type="button" class="lang-choice lang-choice-mobile flex-1 py-2.5 rounded-lg border border-white/15 text-white/60 text-xs font-semibold tracking-wide transition" data-lang="en">English</button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Background video -->
+        <video autoplay muted loop playsinline class="absolute inset-0 w-full h-full object-cover z-0">
+            <source src="./image/PrimeCuts_homepage.mp4" type="video/mp4">
+        </video>
+
+        <!-- Scrim for legibility -->
+        <div class="absolute inset-0 z-10" style="background:
+            linear-gradient(90deg, rgba(8,8,9,0.96) 0%, rgba(8,8,9,0.75) 32%, rgba(8,8,9,0.25) 60%, rgba(8,8,9,0.55) 100%),
+            linear-gradient(0deg, rgba(8,8,9,0.9) 0%, rgba(8,8,9,0) 28%, rgba(8,8,9,0) 72%, rgba(8,8,9,0.75) 100%);"></div>
+        <div class="absolute inset-0 z-10 pointer-events-none" style="background-image: repeating-linear-gradient(-55deg, transparent 0 46px, rgba(255,255,255,0.03) 46px 47px); mask-image: linear-gradient(90deg, black, black 55%, transparent);"></div>
+
+        <!-- Content -->
+        <div class="relative z-20 h-full max-w-7xl mx-auto flex items-center justify-start px-6 md:px-12">
+            <div class="max-w-2xl text-left">
+
+
+                <h1 class="chrome-text text-white text-5xl  md:text-7xl font-bebas uppercase leading-[0.95] mb-8">
+                    <span class="slant" data-i18n="hero.title">Word De Beste<br>Versie Van Jezelf</span>
+                </h1>
+
+                <p class="text-white/60 max-w-md mb-10 text-base md:text-lg leading-relaxed" data-i18n="hero.subtitle">
+                     fades, afwerking met hete handdoek en baardstyling door barbiers die elke stoel behandelen als wedstrijddag.
+                </p>
+
+                <div class="flex flex-wrap items-center gap-4 mb-14">
+                    <a href="appointment.html" data-i18n="hero.cta1" class="btn-corner inline-flex items-center gap-2 bg-gradient-to-b from-accent-light via-accent to-accent-dark hover:-translate-y-0.5 text-white font-bold py-4 px-10 transition duration-300 shadow-lg shadow-black/50">
+                        Boek Je Knipbeurt →
+                    </a>
+                    <a href="#services" data-i18n="hero.cta2" class="btn-corner inline-flex items-center gap-2 bg-panel2 border border-white/15 hover:border-white/40 hover:-translate-y-0.5 text-white font-bold py-4 px-10 transition duration-300">
+                        Bekijk Diensten
+                    </a>
+                </div>
+
+                <div class="inline-flex border border-white/20 bg-black/30 backdrop-blur-sm w-fit">
+                    <div class="px-7 py-4 border-r border-white/20 font-mono text-[11px] text-white/50 tracking-wide">
+                        <span class="flex items-center gap-1.5 font-bebas text-2xl text-white tracking-wide">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-accent shrink-0">
+                                <path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l1.83 4.401 4.753.381c1.164.093 1.636 1.545.749 2.305l-3.622 3.109 1.106 4.637c.271 1.136-.964 2.033-1.96 1.425L12 17.011l-4.068 2.457c-.996.608-2.231-.29-1.96-1.425l1.106-4.637-3.622-3.109c-.887-.76-.415-2.212.749-2.305l4.753-.381 1.83-4.4z" clip-rule="evenodd" />
+                            </svg>
+                            4.9
+                        </span><span data-i18n="hero.stat1Label">Beoordeling</span>
+                    </div>
+                    <div class="px-7 py-4 border-r border-white/20 font-mono text-[11px] text-white/50 tracking-wide">
+                        <span class="block font-bebas text-2xl text-white tracking-wide" data-i18n="hero.stat2Value">3JR</span><span data-i18n="hero.stat2Label">Ervaring</span>
+                    </div>
+                    <div class="px-7 py-4 font-mono text-[11px] text-white/50 tracking-wide">
+                        <span class="block font-bebas text-2xl text-white tracking-wide">&euro;10</span><span data-i18n="hero.stat3Label">voor Contour</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stripe-rule"></div>
+
+    <!-- ========================
+         2. SERVICES SECTION
+    ======================== -->
+    <section id="services" class="relative py-28 px-6 md:px-12 bg-black overflow-hidden">
+        <div class="relative z-10 max-w-7xl mx-auto">
+            <div class="flex flex-wrap justify-between items-end gap-6 mb-16 reveal">
+                <div>
+                    <span class="inline-flex items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.22em] uppercase text-accent">
+                        <span class="w-5 h-0.5 bg-accent inline-block"></span><span data-i18n="services.eyebrow">Tarieven — Prijzen</span>
+                    </span>
+                    <h2 class="chrome-text text-white font-bebas uppercase text-4xl md:text-5xl mt-4"><span class="slant" data-i18n="services.title">Onze Diensten</span></h2>
+                </div>
+                <p class="text-white/50 max-w-xs text-sm leading-relaxed" data-i18n="services.subtitle">Elke kaart hieronder is een plek in de stoel — kies je nummer, neem je plaats.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+                <!-- Service Card 1 -->
+                <div class="glass-service-card featured group relative flex flex-col justify-between h-[500px] p-10 reveal">
+                    <span class="ribbon" data-i18n="services.ribbon">MEEST GEBOEKT</span>
+                    <div>
+                        <span class="font-mono text-[11px] font-bold tracking-widest text-accent" data-i18n="services.card1.num">NR. 01 — VOLWASSENE</span>
+                        <h3 class="font-bebas uppercase text-3xl text-white mt-3 mb-2 tracking-wide">Knipbeurt</h3>
+                        <p class="text-white/50 text-sm" data-i18n="services.card1.desc1">Inclusief styling</p>
+                        <p class="text-white/50 text-sm mt-1" data-i18n="services.card1.desc2">Baard + &euro;5</p>
+                    </div>
+                    <div class="my-8">
+                        <span class="chrome-text font-bebas text-7xl"><sup class="text-2xl align-top">&euro;</sup>25</span>
+                    </div>
+                    <a href="appointment.html?service=Knipbeurt&price=25" data-i18n="action.bookAppointment" class="btn-corner block text-center w-full py-4 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white font-bold uppercase text-sm tracking-wide transition duration-300 hover:-translate-y-0.5">
+                        Boek Afspraak
+                    </a>
+                </div>
+
+                <!-- Service Card 2 -->
+                <div class="glass-service-card group relative flex flex-col justify-between h-[500px] p-10 reveal" style="transition-delay:.08s">
+                    <div>
+                        <span class="font-mono text-[11px] font-bold tracking-widest text-accent" data-i18n="services.card2.num">NR. 02 — KINDEREN</span>
+                        <h3 class="font-bebas uppercase text-3xl text-white mt-3 mb-2 tracking-wide">Knipbeurt Kinderen</h3>
+                        <p class="text-white/50 text-sm" data-i18n="services.card2.desc1">Kinderen tot 12 jaar</p>
+                    </div>
+                    <div class="my-8">
+                        <span class="chrome-text font-bebas text-7xl"><sup class="text-2xl align-top">&euro;</sup>20</span>
+                    </div>
+                    <a href="appointment.html?service=Knipbeurt%20Kinderen&price=20" data-i18n="action.bookAppointment" class="block text-center w-full py-4 border border-white/25 bg-white/5 backdrop-blur-md text-white font-bold uppercase text-sm tracking-wide transition duration-300 hover:bg-white hover:text-black">
+                        Boek Afspraak
+                    </a>
+                </div>
+
+                <!-- Service Card 3 -->
+                <div class="glass-service-card group relative flex flex-col justify-between h-[500px] p-10 reveal" style="transition-delay:.16s">
+
+                    <div>
+                        <span class="font-mono text-[11px] font-bold tracking-widest text-accent" data-i18n="services.card3.num">NR. 03 — SNEL</span>
+                        <h3 class="font-bebas uppercase text-3xl text-white mt-3 mb-2 tracking-wide">Contour</h3>
+                        <p class="text-white/50 text-sm" data-i18n="services.card3.desc1">Verse contourlijn &amp; detaillering</p>
+                    </div>
+                    <div class="my-8">
+                        <span class="chrome-text font-bebas text-7xl"><sup class="text-2xl align-top">&euro;</sup>10</span>
+                    </div>
+                    <a href="appointment.html?service=Contour&price=10" data-i18n="action.bookAppointment" class="block text-center w-full py-4 border border-white/25 bg-white/5 backdrop-blur-md text-white font-bold uppercase text-sm tracking-wide transition duration-300 hover:bg-white hover:text-black">
+                        Boek Afspraak
+                    </a>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- =======================
+         3. GALLERY SECTION
+    ======================== -->
+    <section class="relative py-24 px-6 md:px-12 bg-black overflow-hidden">
+        <div class="relative z-10 max-w-7xl mx-auto">
+            <div class="flex flex-wrap justify-between items-end gap-6 mb-14 reveal">
+                <div>
+                    <span class="inline-flex items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.22em] uppercase text-accent">
+                        <span class="w-5 h-0.5 bg-accent inline-block"></span><span data-i18n="gallery.eyebrow">Het Werk</span>
+                    </span>
+                    <h2 class="chrome-text text-white font-bebas uppercase text-4xl md:text-5xl mt-4"><span class="slant" data-i18n="gallery.title">Galerij</span></h2>
+                </div>
+                <p class="text-white/50 max-w-xs text-sm leading-relaxed" data-i18n="gallery.subtitle">Een blik op de vormen, fades en afwerkingen die dagelijks de stoel verlaten.</p>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <!-- Gallery Item 1 -->
+                <div class="group reveal">
+                    <div class="relative tex-a aspect-[4/5] overflow-hidden transition duration-500 group-hover:scale-[1.03]" style="clip-path: polygon(0 0,100% 0,100% 100%,14px 100%,0 calc(100% - 14px));">
+                        <div class="absolute inset-0" style="background: linear-gradient(180deg, transparent 40%, rgba(10,10,11,0.9) 100%);"></div>
+                        <span class="absolute top-3 right-3 w-8 h-8 flex items-center justify-center border border-white/20 bg-black/40 backdrop-blur-sm font-mono text-xs text-white">01</span>
+                    </div>
+                    <h3 class="mt-4 font-bebas uppercase text-lg text-white tracking-wide" data-i18n="gallery.item1.title">Skin Fade</h3>
+                    <p class="font-mono text-[10px] uppercase tracking-widest text-accent mt-1" data-i18n="gallery.item1.sub">Precisie taper</p>
+                </div>
+                <!-- Gallery Item 2 -->
+                <div class="group reveal" style="transition-delay:.06s">
+                    <div class="relative tex-b aspect-[4/5] overflow-hidden transition duration-500 group-hover:scale-[1.03]" style="clip-path: polygon(0 0,100% 0,100% 100%,14px 100%,0 calc(100% - 14px));">
+                        <div class="absolute inset-0" style="background: linear-gradient(180deg, transparent 40%, rgba(10,10,11,0.9) 100%);"></div>
+                        <span class="absolute top-3 right-3 w-8 h-8 flex items-center justify-center border border-white/20 bg-black/40 backdrop-blur-sm font-mono text-xs text-white">02</span>
+                    </div>
+                    <h3 class="mt-4 font-bebas uppercase text-lg text-white tracking-wide" data-i18n="gallery.item2.title">Getextureerde Crop</h3>
+                    <p class="font-mono text-[10px] uppercase tracking-widest text-accent mt-1" data-i18n="gallery.item2.sub">Natuurlijke afwerking</p>
+                </div>
+                <!-- Gallery Item 3 -->
+                <div class="group reveal" style="transition-delay:.12s">
+                    <div class="relative tex-c aspect-[4/5] overflow-hidden transition duration-500 group-hover:scale-[1.03]" style="clip-path: polygon(0 0,100% 0,100% 100%,14px 100%,0 calc(100% - 14px));">
+                        <div class="absolute inset-0" style="background: linear-gradient(180deg, transparent 40%, rgba(10,10,11,0.9) 100%);"></div>
+                        <span class="absolute top-3 right-3 w-8 h-8 flex items-center justify-center border border-white/20 bg-black/40 backdrop-blur-sm font-mono text-xs text-white">03</span>
+                    </div>
+                    <h3 class="mt-4 font-bebas uppercase text-lg text-white tracking-wide" data-i18n="gallery.item3.title">Lijnwerk</h3>
+                    <p class="font-mono text-[10px] uppercase tracking-widest text-accent mt-1" data-i18n="gallery.item3.sub">Scherpe contour</p>
+                </div>
+                <!-- Gallery Item 4 -->
+                <div class="group reveal" style="transition-delay:.18s">
+                    <div class="relative tex-d aspect-[4/5] overflow-hidden transition duration-500 group-hover:scale-[1.03]" style="clip-path: polygon(0 0,100% 0,100% 100%,14px 100%,0 calc(100% - 14px));">
+                        <div class="absolute inset-0" style="background: linear-gradient(180deg, transparent 40%, rgba(10,10,11,0.9) 100%);"></div>
+                        <span class="absolute top-3 right-3 w-8 h-8 flex items-center justify-center border border-white/20 bg-black/40 backdrop-blur-sm font-mono text-xs text-white">04</span>
+                    </div>
+                    <h3 class="mt-4 font-bebas uppercase text-lg text-white tracking-wide" data-i18n="gallery.item4.title">Baard Sculpting</h3>
+                    <p class="font-mono text-[10px] uppercase tracking-widest text-accent mt-1" data-i18n="gallery.item4.sub">Volledige detaillering</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="stripe-rule"></div>
+
+    <!-- =======================
+         4. FINAL CTA SECTION
+    ======================== -->
+    <section class="relative overflow-hidden bg-black py-28 px-6 md:px-12">
+        <div class="relative z-10 max-w-5xl mx-auto reveal">
+            <div class="relative border border-white/15 bg-white/5 backdrop-blur-xl p-12 md:p-16 text-center shadow-2xl overflow-hidden" style="clip-path: polygon(0 0,100% 0,100% calc(100% - 26px),calc(100% - 26px) 100%,0 100%);">
+                <div class="absolute inset-0 pointer-events-none" style="background: radial-gradient(ellipse 60% 70% at 50% 0%, rgba(229,52,42,0.16), transparent 65%);"></div>
+                <span class="relative inline-block px-6 py-2 border border-accent font-mono text-xs font-bold uppercase tracking-[0.25em] text-accent mb-8">
+                    PrimeCuts
+                </span>
+                <h2 class="chrome-text text-white relative font-bebas uppercase text-4xl md:text-6xl leading-tight">
+                    <span class="slant" data-i18n="cta.title">Klaar Voor Je<br>Volgende Knipbeurt?</span>
+                </h2>
+                <p class="relative mt-6 max-w-2xl mx-auto text-lg text-white/60 leading-relaxed" data-i18n="cta.subtitle">
+                    Loop naar buiten met een strakke fade en een  baardtrim. Boek vandaag nog je afspraak.
+                </p>
+                <div class="relative mt-12">
+                    <a href="appointment.html" class="btn-corner inline-flex items-center gap-3 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white px-10 py-4 font-bold uppercase text-sm tracking-wide transition-all duration-300 hover:-translate-y-0.5">
+                        <span data-i18n="action.bookAppointment">Boek Afspraak</span>
+                        <span class="text-xl">→</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- =======================
+         5. FOOTER
+    ======================== -->
+    <footer class="relative bg-black border-t border-white/10">
+        <div class="max-w-7xl mx-auto px-6 md:px-12 py-20 grid grid-cols-1 md:grid-cols-4 gap-12">
+            <div>
+                <img src="./image/PrimeCuts.png" alt="PrimeCuts Logo" class="w-20 mb-6">
+            </div>
+            <div>
+                <h3 class="font-bebas uppercase text-white text-lg tracking-wide mb-5" data-i18n="footer.visit">Bezoek Ons</h3>
+                <ul class="space-y-3 text-white/50 text-sm font-mono">
+                    <li>Ketelmeerstraat 106</li>
+                    <li>8226 JX Lelystad</li>
+                    <li data-i18n="footer.country">Nederland</li>
+                </ul>
+            </div>
+            <div>
+                <h3 class="font-bebas uppercase text-white text-lg tracking-wide mb-5" data-i18n="footer.contact">Contact</h3>
+                <ul class="space-y-3 text-white/50 text-sm font-mono">
+                    <li><a href="tel:+31612345678" class="hover:text-accent transition">+31 6 12345678</a></li>
+                    <li><a href="mailto:info@primecuts.nl" class="hover:text-accent transition">info@primecuts.nl</a></li>
+                    <li><a href="appointment.html" data-i18n="action.bookAppointment" class="hover:text-accent transition">Boek Afspraak</a></li>
+                </ul>
+            </div>
+            <div>
+                <h3 class="font-bebas uppercase text-white text-lg tracking-wide mb-5" data-i18n="footer.hours">Openingstijden</h3>
+                <ul class="space-y-3 text-white/50 text-sm font-mono">
+                    <li class="flex justify-between"><span data-i18n="footer.monFri">Ma - Vr</span><span>-</span></li>
+                    <li class="flex justify-between"><span data-i18n="footer.saturday">Zaterdag</span><span>-</span></li>
+                    <li class="flex justify-between"><span data-i18n="footer.sunday">Zondag</span><span data-i18n="footer.closed">Gesloten</span></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="stripe-rule"></div>
+        <div class="border-t border-white/10">
+            <div class="max-w-7xl mx-auto px-6 md:px-12 py-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                <p class="text-sm text-white/40 font-mono" data-i18n="footer.copyright">&copy; 2026 PrimeCuts. Alle rechten voorbehouden aan Branch.</p>
+                <div class="flex items-center gap-8">
+                    <a href="#" class="text-white/50 hover:text-accent transition font-mono text-sm">Instagram</a>
+                    <a class="flex items-center gap-2 text-white/50 hover:text-accent transition font-mono text-sm">
+                        <img src="./image/branch-logo.png" alt="Branch Logo" class="h-4 w-auto">
+                        <span data-i18n="footer.poweredBy">Mogelijk gemaakt door Branch</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        async function checkBackendConnection() {
+            try {
+                console.log("Attempting to connect to backend...");
+                const response = await fetch('https://primecutsdb.onrender.com/api/appointments');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log("✅ Successfully connected to backend!");
+                console.log("Response from server:", data);
+
+            } catch (error) {
+                console.error("❌ Failed to connect to backend:", error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const serviceName = params.get('service');
+
+            if (serviceName) {
+                const serviceInput = document.querySelector(`input[value="${serviceName}"]`) ||
+                                     Array.from(document.querySelectorAll('input[type="radio"]')).find(input => input.value.includes(serviceName));
+
+                if (serviceInput) {
+                    serviceInput.checked = true;
+                    serviceInput.dispatchEvent(new Event('change'));
+                }
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', checkBackendConnection);
+
+        // Nav shrink on scroll
+        const nav = document.getElementById('siteNav');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 40) {
+                nav.classList.add('bg-black/80', 'backdrop-blur-md', 'border-b', 'border-white/10');
+            } else {
+                nav.classList.remove('bg-black/80', 'backdrop-blur-md', 'border-b', 'border-white/10');
+            }
+        });
+
+        // Mobile menu toggle
+        const hamburgerBtn = document.getElementById('hamburgerBtn');
+        const mobileMenu = document.getElementById('mobileMenu');
+
+        hamburgerBtn.addEventListener('click', () => {
+            const isOpen = mobileMenu.classList.toggle('is-open');
+            hamburgerBtn.classList.toggle('is-open', isOpen);
+            hamburgerBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+
+        // Close mobile menu when a link is clicked
+        mobileMenu.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                mobileMenu.classList.remove('is-open');
+                hamburgerBtn.classList.remove('is-open');
+                hamburgerBtn.setAttribute('aria-expanded', 'false');
+            });
+        });
+
+        // Close mobile menu on resize back to desktop
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 768) {
+                mobileMenu.classList.remove('is-open');
+                hamburgerBtn.classList.remove('is-open');
+                hamburgerBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        // Scroll reveal
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('in'); });
+        }, { threshold: 0.15 });
+        document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+        // =======================
+        // LANGUAGE SWITCHER
+        // =======================
+        const LANG_STORAGE_KEY = 'primecuts_lang';
+
+        const translations = {
+            nl: {
+                'meta.title': 'Primecuts | Startpagina',
+                'nav.home': 'Home',
+                'nav.book': 'Afspraak Maken',
+                'nav.bookNow': 'Boek Nu',
+                'hero.eyebrow': 'Lelystad — Kapperszaak',
+                'hero.title': 'Word De Beste<br>Versie Van Jezelf',
+                'hero.subtitle': ' fades, afwerking met hete handdoek en baardstyling door barbiers die elke stoel behandelen als wedstrijddag.',
+                'hero.cta1': 'Boek Je Knipbeurt →',
+                'hero.cta2': 'Bekijk Diensten',
+                'hero.stat1Label': 'Beoordeling',
+                'hero.stat2Value': '3JR',
+                'hero.stat2Label': 'Ervaring',
+                'hero.stat3Label': 'voor Contour',
+                'services.eyebrow': 'Tarieven — Prijzen',
+                'services.title': 'Onze Diensten',
+                'services.subtitle': 'Elke kaart hieronder is een plek in de stoel — kies je nummer, neem je plaats.',
+                'services.ribbon': 'MEEST GEBOEKT',
+                'services.card1.num': 'NR. 01 — VOLWASSENE',
+                'services.card1.desc1': 'Inclusief styling',
+                'services.card1.desc2': 'Baard + &euro;5',
+                'services.card2.num': 'NR. 02 — KINDEREN',
+                'services.card2.desc1': 'Kinderen tot 12 jaar',
+                'services.card3.num': 'NR. 03 — SNEL',
+                'services.card3.desc1': 'Verse contourlijn &amp; detaillering',
+                'gallery.eyebrow': 'Het Werk',
+                'gallery.title': 'Galerij',
+                'gallery.subtitle': 'Een blik op de vormen, fades en afwerkingen die dagelijks de stoel verlaten.',
+                'gallery.item1.title': 'Skin Fade',
+                'gallery.item1.sub': 'Precisie taper',
+                'gallery.item2.title': 'Getextureerde Crop',
+                'gallery.item2.sub': 'Natuurlijke afwerking',
+                'gallery.item3.title': 'Lijnwerk',
+                'gallery.item3.sub': 'Scherpe contour',
+                'gallery.item4.title': 'Baard Sculpting',
+                'gallery.item4.sub': 'Volledige detaillering',
+                'cta.title': 'Klaar Voor Je<br>Volgende Knipbeurt?',
+                'cta.subtitle': 'Loop naar buiten met een strakke fade en een  baardtrim. Boek vandaag nog je afspraak.',
+                'action.bookAppointment': 'Boek Afspraak',
+                'footer.visit': 'Bezoek Ons',
+                'footer.contact': 'Contact',
+                'footer.hours': 'Openingstijden',
+                'footer.country': 'Nederland',
+                'footer.monFri': 'Ma - Vr',
+                'footer.saturday': 'Zaterdag',
+                'footer.sunday': 'Zondag',
+                'footer.closed': 'Gesloten',
+                'footer.copyright': '&copy; 2026 PrimeCuts. Alle rechten voorbehouden aan Branch.',
+                'footer.poweredBy': 'Mogelijk gemaakt door Branch'
+            },
+            en: {
+                'meta.title': 'Primecuts | Home',
+                'nav.home': 'Home',
+                'nav.book': 'Book Appointment',
+                'nav.bookNow': 'Book Now',
+                'hero.eyebrow': 'Lelystad — Barbershop',
+                'hero.title': 'Become The Best<br>Version Of Yourself',
+                'hero.subtitle': ' fades, hot towel finishes, and beard styling from barbers who treat every chair like game day.',
+                'hero.cta1': 'Book Your Cut →',
+                'hero.cta2': 'View Services',
+                'hero.stat1Label': 'Rating',
+                'hero.stat2Value': '3YR',
+                'hero.stat2Label': 'Experience',
+                'hero.stat3Label': 'for Contour',
+                'services.eyebrow': 'Rates — Pricing',
+                'services.title': 'Our Services',
+                'services.subtitle': 'Every card below is a seat in the chair — pick your number, take your place.',
+                'services.ribbon': 'MOST BOOKED',
+                'services.card1.num': 'NO. 01 — ADULT',
+                'services.card1.desc1': 'Styling included',
+                'services.card1.desc2': 'Beard + &euro;5',
+                'services.card2.num': 'NO. 02 — KIDS',
+                'services.card2.desc1': 'Kids up to 12 years',
+                'services.card3.num': 'NO. 03 — QUICK',
+                'services.card3.desc1': 'Fresh contour line &amp; detailing',
+                'gallery.eyebrow': 'The Work',
+                'gallery.title': 'Gallery',
+                'gallery.subtitle': 'A look at the shapes, fades, and finishes leaving the chair every day.',
+                'gallery.item1.title': 'Skin Fade',
+                'gallery.item1.sub': 'Precision taper',
+                'gallery.item2.title': 'Textured Crop',
+                'gallery.item2.sub': 'Natural finish',
+                'gallery.item3.title': 'Line Work',
+                'gallery.item3.sub': 'Sharp contour',
+                'gallery.item4.title': 'Beard Sculpting',
+                'gallery.item4.sub': 'Full detailing',
+                'cta.title': 'Ready For Your<br>Next Cut?',
+                'cta.subtitle': 'Walk out with a sharp fade and a clean beard trim. Book your appointment today.',
+                'action.bookAppointment': 'Book Appointment',
+                'footer.visit': 'Visit Us',
+                'footer.contact': 'Contact',
+                'footer.hours': 'Opening Hours',
+                'footer.country': 'Netherlands',
+                'footer.monFri': 'Mon - Fri',
+                'footer.saturday': 'Saturday',
+                'footer.sunday': 'Sunday',
+                'footer.closed': 'Closed',
+                'footer.copyright': '&copy; 2026 PrimeCuts. All rights reserved to Branch.',
+                'footer.poweredBy': 'Powered by Branch'
+            }
+        };
+
+        function updateLangUI(lang) {
+            document.querySelectorAll('.lang-choice').forEach(btn => {
+                const active = btn.getAttribute('data-lang') === lang;
+                const check = btn.querySelector('.check-icon');
+                if (check) {
+                    check.classList.toggle('hidden', !active);
+                } else {
+                    btn.classList.toggle('bg-accent', active);
+                    btn.classList.toggle('border-accent', active);
+                    btn.classList.toggle('text-white', active);
+                    btn.classList.toggle('text-white/60', !active);
+                    btn.classList.toggle('border-white/15', !active);
+                }
+            });
+            document.querySelectorAll('.lang-current-label').forEach(el => {
+                el.textContent = lang === 'nl' ? 'Nederlands' : 'English';
+            });
+        }
+
+        function applyLanguage(lang) {
+            if (!translations[lang]) lang = 'nl';
+            const dict = translations[lang];
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (dict[key] !== undefined) el.innerHTML = dict[key];
+            });
+            document.documentElement.setAttribute('lang', lang);
+            updateLangUI(lang);
+            localStorage.setItem(LANG_STORAGE_KEY, lang);
+        }
+
+        const langBtn = document.getElementById('langBtn');
+        const langMenu = document.getElementById('langMenu');
+        const langChevron = document.getElementById('langChevron');
+
+        langBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const nowHidden = langMenu.classList.toggle('hidden');
+            langBtn.setAttribute('aria-expanded', nowHidden ? 'false' : 'true');
+            langChevron.classList.toggle('rotate-180', !nowHidden);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!langMenu.classList.contains('hidden') && !langMenu.contains(e.target) && e.target !== langBtn) {
+                langMenu.classList.add('hidden');
+                langBtn.setAttribute('aria-expanded', 'false');
+                langChevron.classList.remove('rotate-180');
+            }
+        });
+
+        document.querySelectorAll('.lang-choice').forEach(btn => {
+            btn.addEventListener('click', () => {
+                applyLanguage(btn.getAttribute('data-lang'));
+                langMenu.classList.add('hidden');
+                langBtn.setAttribute('aria-expanded', 'false');
+                langChevron.classList.remove('rotate-180');
+            });
+        });
+
+        applyLanguage(localStorage.getItem(LANG_STORAGE_KEY) || 'nl');
+    </script>
+</body>
+</html>

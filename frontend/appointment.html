@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrimeCuts | Afspraak Maken</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ["Inter", "sans-serif"],
+                        bebas: ['"Bebas Neue"', "sans-serif"],
+                        mono: ['"JetBrains Mono"', "monospace"]
+                    },
+                    colors: {
+                        appbg: "#050505",
+                        panelbg: "#0A0A0A",
+                        cardbg: "#111111",
+                        accent: {
+                            DEFAULT: "#e5342a",
+                            dark: "#a5241d",
+                            light: "#ff4c40"
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: "Inter", sans-serif;
+            background: #050505;
+            color: white;
+            padding-bottom: 22rem;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #050505;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #2a2a2a;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #e5342a;
+        }
+
+        .active-service {
+            box-shadow:
+                0 0 0 1px #e5342a,
+                0 0 25px rgba(229,52,42,.18);
+        }
+
+        .active-time {
+            transform: scale(1.03);
+        }
+
+        .date-btn {
+            transition: .2s;
+        }
+
+        .time-btn {
+            transition: .2s;
+        }
+
+        /* ============ Brand system (shared with homepage) ============ */
+        .chrome-text {
+            background: linear-gradient(180deg, #ffffff 0%, #e7e8ea 22%, #9a9ca1 48%, #cfd0d4 62%, #ffffff 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 2px 0 rgba(0,0,0,0.35);
+        }
+        .slant { display: inline-block; transform: skewX(-6deg); }
+
+        .stripe-rule {
+            height: 6px;
+            width: 100%;
+            background: repeating-linear-gradient(-55deg, #e5342a 0 22px, #ffffff 22px 26px, #e5342a 26px 48px, #0a0a0a 48px 52px);
+            opacity: 0.9;
+        }
+
+        .grain {
+            position: fixed; inset: 0; pointer-events: none; z-index: 200; opacity: .045; mix-blend-mode: overlay;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+
+        .btn-corner {
+            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+        }
+
+        .section-eyebrow {
+            display: inline-flex; align-items: center; gap: 10px;
+            font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
+            letter-spacing: .18em; text-transform: uppercase; color: #e5342a;
+        }
+        .section-eyebrow::before { content: ''; width: 18px; height: 2px; background: #e5342a; display: inline-block; }
+
+        /* ============ Mobile nav ============ */
+        .hamburger-line {
+            transition: transform .3s ease, opacity .3s ease;
+            transform-origin: center;
+        }
+        #hamburgerBtn.is-open .line-top { transform: translateY(6px) rotate(45deg); }
+        #hamburgerBtn.is-open .line-mid { opacity: 0; }
+        #hamburgerBtn.is-open .line-bot { transform: translateY(-6px) rotate(-45deg); }
+
+        #mobileMenu {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height .4s cubic-bezier(.16,.8,.24,1);
+        }
+        #mobileMenu.is-open { max-height: 320px; }
+    </style>
+</head>
+<body class="font-sans antialiased bg-appbg text-white relative">
+
+<div class="grain"></div>
+<div class="stripe-rule"></div>
+
+<!-- ==========================================
+     HERO
+=========================================== -->
+<header class="relative h-[42vh] w-full overflow-hidden border-b border-neutral-900">
+
+    <!-- Background Image -->
+    <div class="absolute inset-0 bg-cover bg-center" style="background-image: linear-gradient(to bottom, rgba(5,5,5,.55), rgba(5,5,5,.97)), url('https://images.unsplash.com/photo-1585747860715-2ba37e788b70?q=80&w=2074&auto=format&fit=crop');"></div>
+
+    <div class="absolute inset-0 pointer-events-none" style="background-image: repeating-linear-gradient(-55deg, transparent 0 46px, rgba(255,255,255,0.03) 46px 47px);"></div>
+
+    <!-- Navigation -->
+    <nav id="siteNav" class="absolute top-0 left-0 w-full z-30">
+        <div class="p-6 md:px-12 flex justify-between items-center">
+            <!-- Logo image clickable to go home -->
+            <a href="index.html" class="flex items-center gap-2 transition-transform duration-300 hover:scale-105">
+                <img src="./image/PrimeCuts.png" alt="Primecuts Logo" class="h-10 md:h-12 w-auto">
+            </a>
+
+            <!-- Desktop links -->
+            <div class="hidden md:flex items-center gap-8 text-sm font-semibold uppercase tracking-wide text-white/70">
+                <a href="index.html" class="relative inline-block transition-all duration-300 hover:text-white after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-accent after:transition-all after:duration-300 hover:after:w-full">
+                    Home
+                </a>
+                <a href="appointment.html" class="relative inline-block text-white after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-full after:bg-accent">
+                    Afspraak Maken
+                </a>
+            </div>
+
+            <!-- Mobile hamburger -->
+            <button id="hamburgerBtn" aria-label="Toggle menu" aria-expanded="false" class="md:hidden relative w-10 h-10 flex flex-col justify-center items-center gap-[6px] z-40">
+                <span class="hamburger-line line-top block w-7 h-0.5 bg-white"></span>
+                <span class="hamburger-line line-mid block w-7 h-0.5 bg-white"></span>
+                <span class="hamburger-line line-bot block w-7 h-0.5 bg-white"></span>
+            </button>
+        </div>
+
+        <!-- Mobile menu panel -->
+        <div id="mobileMenu" class="md:hidden bg-black/95 backdrop-blur-md border-t border-white/10">
+            <div class="flex flex-col px-6 py-6 gap-1 text-sm font-semibold tracking-wide uppercase text-white/70">
+                <a href="index.html" class="py-3 border-b border-white/10 transition-colors duration-300 hover:text-accent">
+                    Home
+                </a>
+                <a href="appointment.html" class="py-3 text-white transition-colors duration-300 hover:text-accent">
+                    Afspraak Maken
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Content -->
+    <div class="relative z-10 flex flex-col justify-center items-center h-full text-center px-6">
+        <span class="section-eyebrow mb-5">
+            PrimeCuts Barbershop
+        </span>
+
+        <h2 class="chrome-text font-bebas uppercase text-5xl md:text-7xl leading-[0.95]">
+            Boek Je
+            <span class="slant text-accent" style="-webkit-text-fill-color: currentColor; background: none;">
+                Afspraak
+            </span>
+        </h2>
+
+        <p class="text-neutral-400 mt-5 max-w-xl">
+            Kies je dienst, kies een tijd,
+            en wij zorgen voor de rest.
+        </p>
+    </div>
+
+</header>
+
+<div class="stripe-rule"></div>
+
+<!-- ==========================================
+     BOOKING SECTION
+========================================== -->
+<main class="max-w-7xl mx-auto px-6 py-14 grid lg:grid-cols-12 gap-10">
+
+    <!-- ======================================
+         LEFT COLUMN
+    ======================================= -->
+    <section class="lg:col-span-4">
+        <div class="bg-panelbg border border-neutral-800 rounded-2xl p-6">
+
+            <h2 class="font-bebas uppercase tracking-wide text-xl mb-6 flex items-center gap-3">
+                <span class="w-1 h-5 bg-accent inline-block"></span>
+                Kies een Dienst
+            </h2>
+
+            <div id="serviceContainer" class="space-y-4">
+
+                <!-- Knipbeurt -->
+                <div class="service-card group relative bg-cardbg border border-transparent hover:border-accent/40 hover:bg-white/[0.02] rounded-xl p-5 cursor-pointer transition" data-service="Knipbeurt" data-price="25">
+                    <div class="checkmark hidden absolute -top-2 -right-2 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-4">
+                            <i class="fa-solid fa-scissors icon text-neutral-500 group-hover:text-accent transition"></i>
+                            <div>
+                                <h3 class="font-semibold">
+                                    Knipbeurt
+                                </h3>
+                                <p class="text-sm text-neutral-500">
+                                    30 minuten
+                                </p>
+                            </div>
+                        </div>
+                        <span class="font-bold">
+                            €25
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Kids -->
+                <div class="service-card group relative bg-cardbg border border-transparent hover:border-accent/40 hover:bg-white/[0.02] rounded-xl p-5 cursor-pointer transition" data-service="Knipbeurt Kinderen" data-price="20">
+                    <div class="checkmark hidden absolute -top-2 -right-2 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-4">
+                            <i class="fa-solid fa-scissors icon text-neutral-500"></i>
+                            <div>
+                                <h3 class="font-semibold">
+                                    Knipbeurt Kinderen
+                                </h3>
+                                <p class="text-sm text-neutral-500">
+                                    30 minuten
+                                </p>
+                            </div>
+                        </div>
+                        <span class="font-bold">
+                            €20
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Contour -->
+                <div class="service-card active-service relative bg-cardbg border border-accent rounded-xl p-5 cursor-pointer transition" data-service="Contour" data-price="10">
+                    <div class="checkmark absolute -top-2 -right-2 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-4">
+                            <i class="fa-solid fa-scissors icon text-accent"></i>
+                            <div>
+                                <h3 class="font-semibold">
+                                    Contour
+                                </h3>
+                                <p class="text-sm text-neutral-500">
+                                    30 minuten
+                                </p>
+                            </div>
+                        </div>
+                        <span class="font-bold">
+                            €10
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Beard -->
+                <div class="service-card group relative bg-cardbg border border-transparent hover:border-accent/40 hover:bg-white/[0.02] rounded-xl p-5 cursor-pointer transition" data-service="Baard" data-price="10">
+                    <div class="checkmark hidden absolute -top-2 -right-2 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-4">
+                            <i class="fa-solid fa-scissors icon text-neutral-500"></i>
+                            <div>
+                                <h3 class="font-semibold">
+                                    Baard
+                                </h3>
+                                <p class="text-sm text-neutral-500">
+                                    30 minuten
+                                </p>
+                            </div>
+                        </div>
+                        <span class="font-bold">
+                            €10
+                        </span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Add-ons -->
+            <div class="mt-10">
+                <h2 class="font-bebas uppercase tracking-wide text-xl mb-4 flex items-center gap-3">
+                    <span class="w-1 h-5 bg-accent inline-block"></span>
+                    Extra's
+                </h2>
+
+                <label class="flex justify-between items-center bg-cardbg rounded-xl p-4 border border-neutral-800 cursor-pointer hover:border-accent/40">
+                    <div class="flex items-center gap-3">
+                        <input class="addon-checkbox accent-[#e5342a]" type="checkbox" data-addon="Baard Trimmen" data-price="5">
+                        <span>
+                            Baard Trimmen
+                        </span>
+                    </div>
+                    <span>
+                        €5
+                    </span>
+                </label>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ======================================
+         RIGHT COLUMN
+    ======================================= -->
+    <section class="lg:col-span-8">
+        <h2 class="font-bebas uppercase tracking-wide text-xl mb-6 flex items-center gap-3">
+            <span class="w-1 h-5 bg-accent inline-block"></span>
+            Kies Datum &amp; Tijd
+        </h2>
+
+        <div class="grid md:grid-cols-[360px_1fr] gap-8">
+
+            <!-- Calendar -->
+            <div class="bg-panelbg border border-neutral-800 rounded-2xl p-6">
+                <h3 id="calendarMonth" class="text-center font-semibold mb-6 font-mono text-sm tracking-wide text-neutral-300 uppercase"></h3>
+
+                <div class="grid grid-cols-7 text-center text-xs uppercase tracking-wide text-neutral-500 mb-4 font-mono">
+                    <div>Ma</div>
+                    <div>Di</div>
+                    <div>Wo</div>
+                    <div>Do</div>
+                    <div>Vr</div>
+                    <div>Za</div>
+                    <div>Zo</div>
+                </div>
+
+                <div id="dateContainer" class="grid grid-cols-7 gap-3 text-center"></div>
+            </div>
+
+            <!-- Time Slots -->
+            <div>
+                <div id="timeContainer" class="grid grid-cols-3 md:grid-cols-4 gap-3"></div>
+            </div>
+
+        </div>
+    </section>
+
+</main>
+
+<!-- ==========================================
+     STICKY BOOKING SUMMARY
+========================================== -->
+<footer class="fixed bottom-0 left-0 w-full bg-gradient-to-t from-appbg via-appbg to-transparent pt-20 pb-6 px-6 z-40">
+    <div class="max-w-5xl mx-auto space-y-5">
+
+        <!-- Summary Card -->
+        <div class="bg-cardbg border border-neutral-800 rounded-2xl p-6 shadow-2xl">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+
+                <!-- Service -->
+                <div>
+                    <p class="text-[10px] uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                        Dienst
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-scissors text-accent"></i>
+                        <span id="summary-service" class="font-semibold">
+                            Contour
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Date -->
+                <div>
+                    <p class="text-[10px] uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                        Datum
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <i class="fa-regular fa-calendar text-accent"></i>
+                        <span id="summary-date" class="font-semibold">
+                            ...
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Time -->
+                <div>
+                    <p class="text-[10px] uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                        Tijd
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <i class="fa-regular fa-clock text-accent"></i>
+                        <span id="summary-time" class="font-semibold">
+                            Kies tijd
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Total -->
+                <div>
+                    <p class="text-[10px] uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                        Totaal
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-euro-sign text-accent"></i>
+                        <span id="summary-total" class="chrome-text font-bebas text-2xl">
+                            €10
+                        </span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Continue Button -->
+        <button id="openCheckoutBtn" disabled class="btn-corner w-full py-4 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white font-bold uppercase tracking-wide text-sm transition-all duration-300 hover:-translate-y-0.5 disabled:bg-neutral-800 disabled:bg-none disabled:text-neutral-500 disabled:cursor-not-allowed disabled:hover:translate-y-0">
+            Doorgaan
+        </button>
+
+    </div>
+</footer>
+
+<!-- ==========================================
+     CHECKOUT MODAL
+========================================== -->
+<div id="checkoutModal" class="fixed inset-0 hidden z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
+    <div class="relative bg-panelbg border border-neutral-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+
+        <!-- Close Button -->
+        <button id="closeModal" type="button" class="absolute top-5 right-5 text-neutral-500 hover:text-accent transition">
+            <i class="fa-solid fa-xmark text-2xl"></i>
+        </button>
+
+        <!-- ==================================
+             BOOKING CONTENT
+        =================================== -->
+        <div id="bookingContent" class="p-8">
+            <h2 class="font-bebas uppercase text-4xl mb-2 tracking-wide">
+                Laatste Details
+            </h2>
+
+            <p class="text-neutral-400 mb-8">
+                Bevestig je
+                <span id="modalService" class="font-semibold text-accent"></span>
+                afspraak.
+            </p>
+
+            <form id="bookingForm" class="space-y-5">
+
+                <!-- Name -->
+                <div>
+                    <label class="block text-xs uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                        Volledige Naam
+                    </label>
+                    <input id="customerName" type="text" required class="w-full bg-appbg border border-neutral-700 rounded-xl px-4 py-3 focus:outline-none focus:border-accent transition">
+                </div>
+
+                <!-- Email -->
+                <div>
+                    <label class="block text-xs uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                        E-mail
+                    </label>
+                    <input id="customerEmail" type="email" required class="w-full bg-appbg border border-neutral-700 rounded-xl px-4 py-3 focus:outline-none focus:border-accent transition">
+                </div>
+
+                <!-- Phone -->
+                <div>
+                    <label class="block text-xs uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                        Telefoonnummer
+                    </label>
+                    <input id="customerPhone" type="tel" required class="w-full bg-appbg border border-neutral-700 rounded-xl px-4 py-3 focus:outline-none focus:border-accent transition">
+                </div>
+
+                <!-- Error -->
+                <div id="errorMessage" class="hidden rounded-xl border border-red-500 bg-red-900/20 text-red-300 p-3 text-sm"></div>
+
+                <!-- Price -->
+                <div class="flex justify-between items-center border-t border-neutral-800 pt-5">
+                    <span class="text-neutral-400 font-mono text-xs uppercase tracking-widest">
+                        Totaal
+                    </span>
+                    <span id="modalPrice" class="chrome-text font-bebas text-3xl">
+                        €10
+                    </span>
+                </div>
+
+                <!-- Submit -->
+                <button id="confirmBtn" type="submit" class="btn-corner w-full mt-2 py-4 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white font-bold uppercase tracking-wide transition-all duration-300 hover:-translate-y-0.5">
+                    Bevestig Afspraak
+                </button>
+
+            </form>
+        </div>
+
+        <!-- ==================================
+             SUCCESS CONTENT
+        =================================== -->
+        <div id="successContent" class="hidden p-10 text-center">
+            <div class="w-20 h-20 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center mx-auto mb-6">
+                <i class="fa-solid fa-check text-4xl"></i>
+            </div>
+
+            <h2 class="font-bebas uppercase text-3xl mb-3 tracking-wide">
+                Afspraak Bevestigd!
+            </h2>
+
+            <p id="successText" class="text-neutral-400 mb-8"></p>
+
+            <button id="bookAnotherBtn" type="button" class="btn-corner w-full py-4 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white font-bold uppercase tracking-wide transition-all duration-300 hover:-translate-y-0.5">
+                Nog een Afspraak Maken
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<script src="appointment.js"></script>
+</body>
+</html>
