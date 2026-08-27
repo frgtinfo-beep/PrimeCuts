@@ -1,3 +1,7 @@
+// Frontend and backend are deployed as separate Render services on different origins, so API calls
+// need the backend's full URL, not a relative path. Update this if the backend ever moves domains.
+const API_BASE_URL = "https://primecutsdb.onrender.com";
+
 // --- 1. STATE MANAGEMENT ---
 let state = {
   service: "Contour",
@@ -270,7 +274,7 @@ async function checkAvailableTimes(selectedDate) {
   });
 
   try {
-    const response = await fetch(`/api/appointments?date=${selectedDate}`);
+    const response = await fetch(`${API_BASE_URL}/api/appointments?date=${selectedDate}`);
     const result = await response.json();
 
     if (result.success) {
@@ -353,7 +357,7 @@ async function showPaymentReturnState() {
   }
 
   try {
-    const response = await fetch(`/api/appointments/${appointmentId}`);
+    const response = await fetch(`${API_BASE_URL}/api/appointments/${appointmentId}`);
     const data = await response.json();
 
     if (!response.ok || !data.success) {
@@ -373,7 +377,7 @@ async function showPaymentReturnState() {
     // Not confirmed yet — SumUp sends the browser back here regardless of outcome, so ask the
     // backend to verify the checkout with SumUp directly and release the hold immediately if the
     // payment actually failed, instead of waiting out the 10-min TTL.
-    const cancelResponse = await fetch("/api/appointments/cancel", {
+    const cancelResponse = await fetch(`${API_BASE_URL}/api/appointments/cancel`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ appointmentId }),
@@ -475,7 +479,7 @@ bookingForm.addEventListener("submit", async (e) => {
   };
 
   try {
-    const response = await fetch("/api/appointments", {
+    const response = await fetch(`${API_BASE_URL}/api/appointments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

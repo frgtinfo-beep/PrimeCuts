@@ -1122,7 +1122,9 @@
       async function checkBackendConnection() {
         try {
           console.log("Attempting to connect to backend...");
-          const response = await fetch("/api/appointments");
+          const response = await fetch(
+            "https://primecutsdb.onrender.com/api/appointments",
+          );
 
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);

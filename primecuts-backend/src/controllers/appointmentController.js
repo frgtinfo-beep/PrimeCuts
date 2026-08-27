@@ -34,7 +34,13 @@ const getBaseUrl = (req) => {
 };
 
 const getPaymentRedirectUrl = (req, appointmentId) => {
-  return `${getBaseUrl(req)}/appointment.html?payment=success&appointmentId=${appointmentId}`;
+  // The customer needs to land back on the frontend site, not this backend service — they're
+  // deployed as separate Render services on different domains. Falls back to this backend's own
+  // origin only if FRONTEND_BASE_URL isn't set, so local single-server testing still works.
+  const frontendBaseUrl = process.env.FRONTEND_BASE_URL
+    ? process.env.FRONTEND_BASE_URL.replace(/\/$/, "")
+    : getBaseUrl(req);
+  return `${frontendBaseUrl}/appointment.html?payment=success&appointmentId=${appointmentId}`;
 };
 
 const getPaymentReturnUrl = (req) => {
