@@ -330,7 +330,7 @@ const confirmBtn = document.getElementById("confirmBtn");
 const bookingContent = document.getElementById("bookingContent");
 const successContent = document.getElementById("successContent");
 const successText = document.getElementById("successText");
-const bookAnotherBtn = document.getElementById("bookAnotherBtn");
+const goHomeBtn = document.getElementById("goHomeBtn");
 
 async function showPaymentReturnState() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -424,9 +424,8 @@ closeModal.addEventListener("click", () => {
   checkoutModal.classList.add("hidden");
 });
 
-bookAnotherBtn.addEventListener("click", () => {
-  checkoutModal.classList.add("hidden");
-  window.location.reload();
+goHomeBtn.addEventListener("click", () => {
+  window.location.href = "/";
 });
 
 bookingForm.addEventListener("submit", async (e) => {

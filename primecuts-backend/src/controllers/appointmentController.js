@@ -1,4 +1,5 @@
 const { isValidObjectId } = require("mongoose");
+const nodemailer = require("nodemailer");
 const Appointment = require("../models/Appointment");
 const ical = require("ical-generator").default;
 const { default: SumUp } = require("@sumup/sdk");
@@ -19,6 +20,51 @@ const ADDON_PRICES = {
 const sumupClient = new SumUp({
   apiKey: process.env.SUMUP_API_KEY || "",
 });
+
+const mailTransporter =
+  process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD
+    ? nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_APP_PASSWORD,
+        },
+      })
+    : null;
+
+// Failing to send this shouldn't fail the booking itself — the payment is already confirmed either way.
+const sendConfirmationEmail = async (appointment) => {
+  if (!mailTransporter) {
+    console.error("Email not configured (missing GMAIL_USER/GMAIL_APP_PASSWORD) — skipping confirmation email.");
+    return;
+  }
+
+  const addonsText =
+    appointment.addons && appointment.addons.length > 0
+      ? `\nExtra's: ${appointment.addons.join(", ")}`
+      : "";
+
+  try {
+    await mailTransporter.sendMail({
+      from: `"PrimeCuts" <${process.env.GMAIL_USER}>`,
+      to: appointment.customerEmail,
+      subject: "Je afspraak bij PrimeCuts is bevestigd",
+      text: `Hoi ${appointment.customerName},
+
+Je afspraak is bevestigd:
+
+Behandeling: ${appointment.service}${addonsText}
+Datum: ${appointment.date}
+Tijd: ${appointment.time}
+Totaal: €${appointment.totalPrice}
+
+Tot dan!
+PrimeCuts`,
+    });
+  } catch (error) {
+    console.error("Failed to send confirmation email:", error.message);
+  }
+};
 
 const getBaseUrl = (req) => {
   if (process.env.SUMUP_PUBLIC_BASE_URL) {
@@ -252,6 +298,8 @@ const resolveCheckoutStatus = async (appointment) => {
   appointment.status = "confirmed";
   appointment.expiresAt = undefined;
   await appointment.save();
+
+  await sendConfirmationEmail(appointment);
 
   return { status: "confirmed" };
 };
