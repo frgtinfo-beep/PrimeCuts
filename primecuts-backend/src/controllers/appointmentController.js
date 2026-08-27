@@ -182,132 +182,136 @@ const createAppointment = async (req, res) => {
   }
 };
 
+// SumUp doesn't sign its webhook payload, so the body can't be trusted for the actual payment
+// decision — it's only used to look up which appointment this is about. The real status always
+// comes from a fresh GET against SumUp's API using the checkout id WE stored when we created the
+// checkout (never one supplied by the caller), so a forged webhook/cancel call can't confirm or
+// tamper with a booking. Shared by the webhook and the frontend's return-from-checkout flow, since
+// SumUp only offers a single redirect_url for both outcomes and may deliver the webhook late.
+const resolveCheckoutStatus = async (appointment) => {
+  if (appointment.status === "confirmed") {
+    return { status: "confirmed" };
+  }
+
+  if (!appointment.sumupCheckoutId) {
+    return { status: "error", error: "Appointment has no checkout on record." };
+  }
+
+  let checkoutStatus;
+  try {
+    const checkout = await sumupClient.checkouts.get(appointment.sumupCheckoutId);
+    checkoutStatus = String(checkout.status || "").toUpperCase();
+  } catch (lookupError) {
+    console.error("Unable to verify SumUp checkout:", lookupError.message);
+    return { status: "error", error: "Unable to verify SumUp checkout status." };
+  }
+
+  if (checkoutStatus !== "PAID") {
+    // PENDING just means SumUp hasn't decided yet (e.g. still on 3DS) — leave the hold in place
+    // and only release it once SumUp reports a terminal failure so we don't race a late success.
+    if (checkoutStatus === "FAILED" || checkoutStatus === "EXPIRED") {
+      await Appointment.findByIdAndDelete(appointment._id);
+      return { status: "released", checkoutStatus };
+    }
+    return { status: "pending", checkoutStatus };
+  }
+
+  // Double check race conditions just in case
+  const collision = await Appointment.findOne({
+    date: appointment.date,
+    time: appointment.time,
+    status: "confirmed",
+    _id: { $ne: appointment._id },
+  });
+
+  if (collision) {
+    await Appointment.findByIdAndDelete(appointment._id);
+    return { status: "collision" };
+  }
+
+  // Clear expiration timer and lock it in as confirmed
+  appointment.status = "confirmed";
+  appointment.expiresAt = undefined;
+  await appointment.save();
+
+  return { status: "confirmed" };
+};
+
+const findAppointmentForCheckoutNotification = async (body) => {
+  const appointmentId =
+    body.checkout_reference || body.appointmentId || body.checkoutReference;
+  const checkoutId = body.checkout_id || body.checkoutId || body.id;
+
+  if (!appointmentId && !checkoutId) {
+    return null;
+  }
+
+  const appointmentQuery = [];
+  if (appointmentId) {
+    appointmentQuery.push({ _id: appointmentId });
+    appointmentQuery.push({ sumupCheckoutReference: appointmentId });
+  }
+  if (checkoutId) {
+    appointmentQuery.push({ sumupCheckoutId: checkoutId });
+  }
+
+  return Appointment.findOne({ $or: appointmentQuery });
+};
+
 // Step 2: called by the payment provider once payment goes through
 const handlePaymentWebhook = async (req, res) => {
   try {
     const body = req.body || {};
-    const appointmentId =
-      body.checkout_reference || body.appointmentId || body.checkoutReference;
-    const checkoutId = body.checkout_id || body.checkoutId || body.id;
-    const reportedStatus = String(body.status || "").toUpperCase();
-
-    if (!appointmentId && !checkoutId) {
+    if (!body.checkout_reference && !body.appointmentId && !body.checkoutReference && !body.checkout_id && !body.checkoutId && !body.id) {
       return res.status(400).json({ error: "Missing checkout reference." });
     }
 
-    let checkoutStatus = reportedStatus;
-    if (checkoutId) {
-      try {
-        const checkout = await sumupClient.checkouts.get(checkoutId);
-        checkoutStatus = String(
-          checkout.status || checkoutStatus,
-        ).toUpperCase();
-      } catch (lookupError) {
-        console.error("Unable to verify SumUp checkout:", lookupError.message);
-        if (!checkoutStatus) {
-          return res
-            .status(500)
-            .json({ error: "Unable to verify SumUp checkout status." });
-        }
-      }
-    }
-
-    const appointmentQuery = [];
-    if (appointmentId) {
-      appointmentQuery.push({ _id: appointmentId });
-      appointmentQuery.push({ sumupCheckoutReference: appointmentId });
-    }
-    if (checkoutId) {
-      appointmentQuery.push({ sumupCheckoutId: checkoutId });
-    }
-
-    const appointment = await Appointment.findOne({ $or: appointmentQuery });
+    const appointment = await findAppointmentForCheckoutNotification(body);
     if (!appointment) {
-      return res
-        .status(200)
-        .json({
-          success: true,
-          message: "Appointment hold expired or not found.",
-        });
-    }
-
-    if (checkoutStatus && checkoutStatus !== "PAID") {
-      await Appointment.findByIdAndDelete(appointment._id);
-      return res
-        .status(200)
-        .json({
-          success: true,
-          message: `Checkout finished with status ${checkoutStatus}.`,
-        });
-    }
-
-    // Double check race conditions just in case
-    const collision = await Appointment.findOne({
-      date: appointment.date,
-      time: appointment.time,
-      status: "confirmed",
-      _id: { $ne: appointment._id },
-    });
-
-    if (collision) {
-      await Appointment.findByIdAndDelete(appointment._id);
-      return res
-        .status(409)
-        .json({
-          error: "Slot was taken by someone else before payment completed.",
-        });
-    }
-
-    // Clear expiration timer and lock it in as confirmed
-    appointment.status = "confirmed";
-    appointment.sumupCheckoutId = checkoutId || appointment.sumupCheckoutId;
-    appointment.sumupCheckoutReference =
-      appointmentId || appointment.sumupCheckoutReference;
-    appointment.expiresAt = undefined;
-    await appointment.save();
-
-    res
-      .status(200)
-      .json({
+      return res.status(200).json({
         success: true,
-        message: "Payment verified and appointment confirmed!",
+        message: "Appointment hold expired or not found.",
       });
+    }
+
+    const result = await resolveCheckoutStatus(appointment);
+    if (result.status === "error") {
+      return res.status(502).json({ error: result.error });
+    }
+
+    res.status(200).json({ success: true, message: `Checkout resolved: ${result.status}` });
   } catch (error) {
     console.error("Webhook Error:", error);
     res.status(500).json({ error: "Webhook processing failed" });
   }
 };
 
-// Step 3: for when a payment is cancelled or fails.
-// PAYMENT DEV: uncomment this, add cancelAppointment to module.exports below, and turn on the
-// '/cancel' route in appointmentRoutes.js. Call it from the frontend as soon as the payment
-// provider's cancel/fail redirect fires, so the slot frees up right away instead of the
-// customer's browser having to wait for the 10-min auto-delete.
-/*
+// Step 3: called by the frontend as soon as the browser returns from SumUp's checkout, so the slot
+// frees up right away on a failed/expired payment instead of waiting out the 10-min auto-delete.
 const cancelAppointment = async (req, res) => {
-    try {
-        const { appointmentId } = req.body;
-
-        const appointment = await Appointment.findById(appointmentId);
-        if (!appointment) {
-            // Already auto-deleted or never existed, nothing to do
-            return res.status(200).json({ success: true, message: 'Nothing to cancel.' });
-        }
-
-        // Don't delete a booking that's already been paid for, just in case
-        if (appointment.status === 'confirmed') {
-            return res.status(400).json({ error: 'This appointment is already confirmed and cannot be cancelled.' });
-        }
-
-        await Appointment.findByIdAndDelete(appointmentId);
-
-        res.status(200).json({ success: true, message: 'Booking cancelled, slot released.' });
-    } catch (error) {
-        console.error("Cancel Error:", error);
-        res.status(500).json({ error: 'Cancel processing failed' });
+  try {
+    const { appointmentId } = req.body;
+    if (!appointmentId) {
+      return res.status(400).json({ error: "Missing appointmentId." });
     }
+
+    const appointment = await Appointment.findById(appointmentId);
+    if (!appointment) {
+      // Already auto-deleted or never existed, nothing to do
+      return res.status(200).json({ success: true, status: "released" });
+    }
+
+    const result = await resolveCheckoutStatus(appointment);
+    if (result.status === "error") {
+      return res.status(502).json({ error: result.error });
+    }
+
+    res.status(200).json({ success: true, status: result.status });
+  } catch (error) {
+    console.error("Cancel Error:", error);
+    res.status(500).json({ error: "Cancel processing failed" });
+  }
 };
-*/
 
 // Generates the live WebCal feed for the barber's Apple Calendar (confirmed only)
 const getCalendarFeed = async (req, res) => {
@@ -346,4 +350,5 @@ module.exports = {
   getAppointmentById,
   getCalendarFeed,
   handlePaymentWebhook,
+  cancelAppointment,
 };

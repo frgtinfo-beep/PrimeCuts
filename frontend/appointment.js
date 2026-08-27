@@ -361,14 +361,37 @@ async function showPaymentReturnState() {
     }
 
     bookingContent.classList.add("hidden");
-    errorMessage.classList.add("hidden");
-    successContent.classList.remove("hidden");
     checkoutModal.classList.remove("hidden");
 
     if (data.data.status === "confirmed") {
+      errorMessage.classList.add("hidden");
+      successContent.classList.remove("hidden");
       successText.textContent = `Betaling ontvangen. Je afspraak staat vast op ${data.data.date} om ${data.data.time}.`;
+      return;
+    }
+
+    // Not confirmed yet — SumUp sends the browser back here regardless of outcome, so ask the
+    // backend to verify the checkout with SumUp directly and release the hold immediately if the
+    // payment actually failed, instead of waiting out the 10-min TTL.
+    const cancelResponse = await fetch("/api/appointments/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appointmentId }),
+    });
+    const cancelData = await cancelResponse.json();
+
+    if (cancelData.status === "confirmed") {
+      errorMessage.classList.add("hidden");
+      successContent.classList.remove("hidden");
+      successText.textContent = `Betaling ontvangen. Je afspraak staat vast op ${data.data.date} om ${data.data.time}.`;
+    } else if (cancelData.status === "released" || cancelData.status === "collision") {
+      successContent.classList.add("hidden");
+      errorMessage.classList.remove("hidden");
+      errorMessage.textContent = "Betaling mislukt of geannuleerd. Je tijdslot is niet bevestigd.";
     } else {
-      successText.textContent = `Betaling ontvangen. Je afspraak voor ${data.data.date} om ${data.data.time} wordt nog bevestigd.`;
+      errorMessage.classList.add("hidden");
+      successContent.classList.remove("hidden");
+      successText.textContent = `Betaling voor ${data.data.date} om ${data.data.time} wordt nog verwerkt.`;
     }
   } catch (error) {
     bookingContent.classList.add("hidden");
@@ -524,21 +547,4 @@ window.addEventListener("DOMContentLoaded", () => {
   updateSummaryBar();
   checkAvailableTimes(state.date);
   showPaymentReturnState();
-
-  // PAYMENT INTEGRATION: uncomment once the backend's /api/appointments/cancel route (see appointmentRoutes.js) is live.
-  // Point your payment provider's cancel_url / failure redirect back to this page with these query params
-  // so the held slot is released immediately instead of waiting out the 10-min TTL.
-  /*
-    const cancelledAppointmentId = urlParams.get('appointmentId');
-    if (urlParams.get('cancelled') === 'true' && cancelledAppointmentId) {
-        fetch('https://primecutsdb.onrender.com/api/appointments/cancel', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ appointmentId: cancelledAppointmentId })
-        }).catch(err => console.error('Cancel cleanup failed:', err));
-
-        errorMessage.textContent = 'Betaling geannuleerd. Je afspraak is niet doorgegaan.';
-        errorMessage.classList.remove('hidden');
-    }
-    */
 });
