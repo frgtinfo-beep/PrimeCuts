@@ -1,3 +1,4 @@
+const { isValidObjectId } = require("mongoose");
 const Appointment = require("../models/Appointment");
 const ical = require("ical-generator").default;
 const { default: SumUp } = require("@sumup/sdk");
@@ -44,6 +45,12 @@ const getPaymentReturnUrl = (req) => {
 const getAppointments = async (req, res) => {
   try {
     const { date } = req.query;
+    // Express parses bracket notation (e.g. ?date[$ne]=x) into an object, which Mongo would then
+    // read as a query operator instead of a literal value — reject anything that isn't a plain string.
+    if (date !== undefined && typeof date !== "string") {
+      return res.status(400).json({ success: false, error: "Invalid date." });
+    }
+
     const query = { status: { $in: ["pending", "confirmed"] } };
     if (date) query.date = date;
 
@@ -89,6 +96,12 @@ const createAppointment = async (req, res) => {
       date,
       time,
     } = req.body;
+
+    // date/time feed straight into a Mongo query below — reject anything that isn't a plain string
+    // so a crafted object (e.g. { "$ne": null }) can't be read as a query operator.
+    if (typeof date !== "string" || typeof time !== "string") {
+      return res.status(400).json({ error: "Invalid date or time." });
+    }
 
     // Work out the price ourselves instead of trusting the price sent from the browser
     const servicePrice = SERVICE_PRICES[service];
@@ -238,9 +251,14 @@ const resolveCheckoutStatus = async (appointment) => {
 };
 
 const findAppointmentForCheckoutNotification = async (body) => {
-  const appointmentId =
+  const rawAppointmentId =
     body.checkout_reference || body.appointmentId || body.checkoutReference;
-  const checkoutId = body.checkout_id || body.checkoutId || body.id;
+  const rawCheckoutId = body.checkout_id || body.checkoutId || body.id;
+
+  // These go straight into a Mongo filter below, so only ever accept plain strings — an object
+  // like { "$ne": null } would otherwise be read as a query operator and match arbitrary documents.
+  const appointmentId = typeof rawAppointmentId === "string" ? rawAppointmentId : null;
+  const checkoutId = typeof rawCheckoutId === "string" ? rawCheckoutId : null;
 
   if (!appointmentId && !checkoutId) {
     return null;
@@ -248,11 +266,17 @@ const findAppointmentForCheckoutNotification = async (body) => {
 
   const appointmentQuery = [];
   if (appointmentId) {
-    appointmentQuery.push({ _id: appointmentId });
+    if (isValidObjectId(appointmentId)) {
+      appointmentQuery.push({ _id: appointmentId });
+    }
     appointmentQuery.push({ sumupCheckoutReference: appointmentId });
   }
   if (checkoutId) {
     appointmentQuery.push({ sumupCheckoutId: checkoutId });
+  }
+
+  if (appointmentQuery.length === 0) {
+    return null;
   }
 
   return Appointment.findOne({ $or: appointmentQuery });
@@ -291,8 +315,8 @@ const handlePaymentWebhook = async (req, res) => {
 const cancelAppointment = async (req, res) => {
   try {
     const { appointmentId } = req.body;
-    if (!appointmentId) {
-      return res.status(400).json({ error: "Missing appointmentId." });
+    if (typeof appointmentId !== "string" || !isValidObjectId(appointmentId)) {
+      return res.status(400).json({ error: "Missing or invalid appointmentId." });
     }
 
     const appointment = await Appointment.findById(appointmentId);
