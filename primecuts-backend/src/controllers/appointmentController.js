@@ -1,8 +1,11 @@
 const { isValidObjectId } = require("mongoose");
 const nodemailer = require("nodemailer");
+const twilio = require("twilio");
 const Appointment = require("../models/Appointment");
 const ical = require("ical-generator").default;
 const { default: SumUp } = require("@sumup/sdk");
+
+const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecuts.onrender.com").replace(/\/$/, "");
 
 // Real prices, kept here so we don't trust whatever price the browser sends us.
 // Keep this in sync with the data-price values in frontend/appointment.html.
@@ -32,6 +35,70 @@ const mailTransporter =
       })
     : null;
 
+const twilioClient =
+  process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+    ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+    : null;
+
+// Customer phone numbers are free-typed (06..., +316..., 0031 6...) but Twilio requires strict E.164.
+// Defaults to Dutch (+31) since the site and every booking on it are Dutch.
+const toE164 = (phone) => {
+  const raw = String(phone).replace(/[^\d+]/g, "");
+  if (raw.startsWith("+")) return raw;
+  if (raw.startsWith("0031")) return `+${raw.slice(2)}`;
+  if (raw.startsWith("31")) return `+${raw}`;
+  if (raw.startsWith("0")) return `+31${raw.slice(1)}`;
+  return `+${raw}`;
+};
+
+const buildDetailRow = (label, value, isLast) => `
+  <tr>
+    <td style="padding:14px 16px;color:#737373;font-size:13px;font-family:Arial,Helvetica,sans-serif;${isLast ? "" : "border-bottom:1px solid #1f1f1f;"}">${label}</td>
+    <td style="padding:14px 16px;color:#ffffff;font-size:14px;font-weight:600;font-family:Arial,Helvetica,sans-serif;text-align:right;${isLast ? "" : "border-bottom:1px solid #1f1f1f;"}">${value}</td>
+  </tr>`;
+
+// Inline-styled table layout (not the site's Tailwind classes) since email clients don't load
+// external stylesheets — but same palette/logo as the website so it reads as the same brand.
+const buildConfirmationEmailHtml = (appointment) => {
+  const addonsRow =
+    appointment.addons && appointment.addons.length > 0
+      ? buildDetailRow("Extra's", appointment.addons.join(", "))
+      : "";
+
+  return `<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:0;background:#050505;">
+    <div style="background:#050505;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:0 auto;">
+        <tr>
+          <td align="center" style="padding-bottom:24px;">
+            <img src="${FRONTEND_URL}/image/PrimeCuts.png" alt="PrimeCuts" height="36" style="display:block;border:0;">
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#111111;border-radius:16px;border:1px solid #262626;padding:32px 24px;">
+            <p style="margin:0 0 8px;color:#e5342a;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">Betaling ontvangen</p>
+            <h1 style="margin:0 0 20px;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;">Afspraak Bevestigd</h1>
+            <p style="margin:0 0 24px;color:#a3a3a3;font-size:15px;line-height:1.6;">Hoi ${appointment.customerName}, je afspraak bij PrimeCuts staat vast.</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0A;border-radius:12px;border:1px solid #262626;">
+              ${buildDetailRow("Behandeling", appointment.service)}
+              ${addonsRow}
+              ${buildDetailRow("Datum", appointment.date)}
+              ${buildDetailRow("Tijd", appointment.time)}
+              ${buildDetailRow("Totaal", `&euro;${appointment.totalPrice}`, true)}
+            </table>
+            <p style="margin:24px 0 0;color:#737373;font-size:13px;line-height:1.6;">Tot dan!<br>PrimeCuts Barbershop</p>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding-top:20px;color:#404040;font-size:11px;font-family:Arial,Helvetica,sans-serif;">PrimeCuts Barbershop</td>
+        </tr>
+      </table>
+    </div>
+  </body>
+</html>`;
+};
+
 // Failing to send this shouldn't fail the booking itself — the payment is already confirmed either way.
 const sendConfirmationEmail = async (appointment) => {
   if (!mailTransporter) {
@@ -60,9 +127,28 @@ Totaal: €${appointment.totalPrice}
 
 Tot dan!
 PrimeCuts`,
+      html: buildConfirmationEmailHtml(appointment),
     });
   } catch (error) {
     console.error("Failed to send confirmation email:", error.message);
+  }
+};
+
+// Same non-fatal-failure rule as the email — an SMS hiccup shouldn't undo a confirmed booking.
+const sendConfirmationSms = async (appointment) => {
+  if (!twilioClient || !process.env.TWILIO_FROM_NUMBER) {
+    console.error("SMS not configured (missing TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER) — skipping confirmation SMS.");
+    return;
+  }
+
+  try {
+    await twilioClient.messages.create({
+      to: toE164(appointment.customerPhone),
+      from: process.env.TWILIO_FROM_NUMBER,
+      body: `PrimeCuts: je afspraak (${appointment.service}, ${appointment.date} om ${appointment.time}) is bevestigd. Tot dan!`,
+    });
+  } catch (error) {
+    console.error("Failed to send confirmation SMS:", error.message);
   }
 };
 
@@ -299,7 +385,10 @@ const resolveCheckoutStatus = async (appointment) => {
   appointment.expiresAt = undefined;
   await appointment.save();
 
-  await sendConfirmationEmail(appointment);
+  await Promise.all([
+    sendConfirmationEmail(appointment),
+    sendConfirmationSms(appointment),
+  ]);
 
   return { status: "confirmed" };
 };
