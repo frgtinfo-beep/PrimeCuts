@@ -15,7 +15,6 @@
     "ical-generator": "^11.1.0",
     "mongodb": "^7.5.0",
     "mongoose": "^9.9.1",
-    "nodemailer": "^9.0.5",
-    "twilio": "^6.1.0"
+    "nodemailer": "^9.0.5"
   }
 }
