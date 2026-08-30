@@ -4,6 +4,7 @@ const twilio = require("twilio");
 const Appointment = require("../models/Appointment");
 const ical = require("ical-generator").default;
 const { default: SumUp } = require("@sumup/sdk");
+const { scheduleBranchReport } = require("../services/branchReporter");
 
 const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecuts.onrender.com").replace(/\/$/, "");
 
@@ -205,7 +206,7 @@ const getAppointmentById = async (req, res) => {
     const appointment = await Appointment.findById(
       req.params.appointmentId,
     ).select(
-      "date time service addons totalPrice status sumupCheckoutId sumupCheckoutReference",
+      "date time service addons totalPrice status sumupCheckoutId sumupCheckoutReference branchReportStatus branchReportAttempts branchReportLastError",
     );
 
     if (!appointment) {
@@ -349,8 +350,9 @@ const resolveCheckoutStatus = async (appointment) => {
   }
 
   let checkoutStatus;
+  let checkout;
   try {
-    const checkout = await sumupClient.checkouts.get(appointment.sumupCheckoutId);
+    checkout = await sumupClient.checkouts.get(appointment.sumupCheckoutId);
     checkoutStatus = String(checkout.status || "").toUpperCase();
   } catch (lookupError) {
     console.error("Unable to verify SumUp checkout:", lookupError.message);
@@ -388,6 +390,10 @@ const resolveCheckoutStatus = async (appointment) => {
   await Promise.all([
     sendConfirmationEmail(appointment),
     sendConfirmationSms(appointment),
+    // Reports the completed transaction to Branch.nu for their revenue-share fee tracking. Never
+    // throws — a Branch.nu outage must not affect the customer's already-confirmed payment; it
+    // just gets picked up by the retry sweep in server.js instead.
+    scheduleBranchReport(appointment, checkout),
   ]);
 
   return { status: "confirmed" };
