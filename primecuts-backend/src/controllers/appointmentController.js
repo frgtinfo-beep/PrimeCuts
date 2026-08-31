@@ -1,6 +1,5 @@
 const { isValidObjectId } = require("mongoose");
 const nodemailer = require("nodemailer");
-const twilio = require("twilio");
 const Appointment = require("../models/Appointment");
 const ical = require("ical-generator").default;
 const { default: SumUp } = require("@sumup/sdk");
@@ -35,22 +34,6 @@ const mailTransporter =
         },
       })
     : null;
-
-const twilioClient =
-  process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
-    ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-    : null;
-
-// Customer phone numbers are free-typed (06..., +316..., 0031 6...) but Twilio requires strict E.164.
-// Defaults to Dutch (+31) since the site and every booking on it are Dutch.
-const toE164 = (phone) => {
-  const raw = String(phone).replace(/[^\d+]/g, "");
-  if (raw.startsWith("+")) return raw;
-  if (raw.startsWith("0031")) return `+${raw.slice(2)}`;
-  if (raw.startsWith("31")) return `+${raw}`;
-  if (raw.startsWith("0")) return `+31${raw.slice(1)}`;
-  return `+${raw}`;
-};
 
 const buildDetailRow = (label, value, isLast) => `
   <tr>
@@ -132,24 +115,6 @@ PrimeCuts`,
     });
   } catch (error) {
     console.error("Failed to send confirmation email:", error.message);
-  }
-};
-
-// Same non-fatal-failure rule as the email — an SMS hiccup shouldn't undo a confirmed booking.
-const sendConfirmationSms = async (appointment) => {
-  if (!twilioClient || !process.env.TWILIO_FROM_NUMBER) {
-    console.error("SMS not configured (missing TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER) — skipping confirmation SMS.");
-    return;
-  }
-
-  try {
-    await twilioClient.messages.create({
-      to: toE164(appointment.customerPhone),
-      from: process.env.TWILIO_FROM_NUMBER,
-      body: `PrimeCuts: je afspraak (${appointment.service}, ${appointment.date} om ${appointment.time}) is bevestigd. Tot dan!`,
-    });
-  } catch (error) {
-    console.error("Failed to send confirmation SMS:", error.message);
   }
 };
 
@@ -389,7 +354,6 @@ const resolveCheckoutStatus = async (appointment) => {
 
   await Promise.all([
     sendConfirmationEmail(appointment),
-    sendConfirmationSms(appointment),
     // Reports the completed transaction to Branch.nu for their revenue-share fee tracking. Never
     // throws — a Branch.nu outage must not affect the customer's already-confirmed payment; it
     // just gets picked up by the retry sweep in server.js instead.
