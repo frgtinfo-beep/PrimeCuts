@@ -69,7 +69,7 @@ addonCheckboxes.forEach((checkbox) => {
   });
 });
 
-// --- 5. DYNAMIC GENERATORS (Weekdays only, 11-6, 45min intervals) ---
+// --- 5. DYNAMIC GENERATORS (Weekdays only, 11-19, 35min intervals) ---
 function generateDates() {
   const container = document.getElementById("dateContainer");
   const monthHeader = document.getElementById("calendarMonth");
@@ -133,8 +133,8 @@ function generateTimeSlots() {
   container.innerHTML = "";
 
   let currentMin = 11 * 60; // 11:00 AM
-  const endMin = 18 * 60; // 6:00 PM
-  const interval = 45;
+  const endMin = 19 * 60; // 7:00 PM
+  const interval = 35;
 
   while (currentMin + interval <= endMin) {
     const h = Math.floor(currentMin / 60)
