@@ -1,6 +1,6 @@
-// Frontend and backend are deployed as separate Render services on different origins, so API calls
-// need the backend's full URL, not a relative path. Update this if the backend ever moves domains.
-const API_BASE_URL = "https://primecutsdb.onrender.com";
+// Frontend and backend are served from the same Render service (see primecuts-backend/src/app.js),
+// so API calls can use a relative path and stay same-origin regardless of custom domain.
+const API_BASE_URL = "";
 
 // --- 1. STATE MANAGEMENT ---
 let state = {
@@ -91,7 +91,7 @@ function generateDates() {
 
   let firstWeekdaySet = false;
 
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 14; i++) {
     const dateObj = new Date(today);
     dateObj.setDate(today.getDate() + i);
 

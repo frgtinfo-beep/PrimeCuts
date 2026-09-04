@@ -4,33 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title data-i18n="meta.title">Primecuts | Startpagina</title>
-    <!-- Tailwind CSS Play CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Custom configuration -->
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ["Inter", "sans-serif"],
-              bebas: ['"Bebas Neue"', "sans-serif"],
-              mono: ['"JetBrains Mono"', "monospace"],
-            },
-            colors: {
-              ink: "#0a0a0b",
-              panel: "#111113",
-              panel2: "#18181b",
-              line: "rgba(255,255,255,0.10)",
-              accent: {
-                DEFAULT: "#e5342a",
-                dark: "#a5241d",
-                light: "#ff4c40",
-              },
-            },
-          },
-        },
-      };
-    </script>
+    <!-- Compiled Tailwind CSS (built via `npm run build:css` in frontend/) -->
+    <link rel="stylesheet" href="/dist/tailwind.css" />
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 
@@ -1122,9 +1097,7 @@
       async function checkBackendConnection() {
         try {
           console.log("Attempting to connect to backend...");
-          const response = await fetch(
-            "https://primecutsdb.onrender.com/api/appointments",
-          );
+          const response = await fetch("/api/appointments");
 
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);

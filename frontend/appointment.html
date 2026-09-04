@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PrimeCuts | Afspraak Maken</title>
 
-    <!-- Tailwind -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Compiled Tailwind CSS (built via `npm run build:css` in frontend/) -->
+    <link rel="stylesheet" href="/dist/tailwind.css" />
 
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -15,30 +15,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ["Inter", "sans-serif"],
-                        bebas: ['"Bebas Neue"', "sans-serif"],
-                        mono: ['"JetBrains Mono"', "monospace"]
-                    },
-                    colors: {
-                        appbg: "#050505",
-                        panelbg: "#0A0A0A",
-                        cardbg: "#111111",
-                        accent: {
-                            DEFAULT: "#e5342a",
-                            dark: "#a5241d",
-                            light: "#ff4c40"
-                        }
-                    }
-                }
-            }
-        };
-    </script>
 
     <style>
         html {
@@ -148,7 +124,7 @@
 <header class="relative h-[42vh] w-full overflow-hidden border-b border-neutral-900">
 
     <!-- Background Image -->
-    <div class="absolute inset-0 bg-cover bg-center" style="background-image: linear-gradient(to bottom, rgba(5,5,5,.55), rgba(5,5,5,.97)), url('https://images.unsplash.com/photo-1585747860715-2ba37e788b70?q=80&w=2074&auto=format&fit=crop');"></div>
+    <div class="absolute inset-0 bg-cover bg-center opacity-40" style="background-image: url('./image/appointment_image.jpg');"></div>
 
     <div class="absolute inset-0 pointer-events-none" style="background-image: repeating-linear-gradient(-55deg, transparent 0 46px, rgba(255,255,255,0.03) 46px 47px);"></div>
 
