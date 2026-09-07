@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrimeCuts | Barber Login</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ["Inter", "sans-serif"],
+                        bebas: ['"Bebas Neue"', "sans-serif"]
+                    },
+                    colors: {
+                        appbg: "#050505",
+                        panelbg: "#0A0A0A",
+                        cardbg: "#111111",
+                        accent: {
+                            DEFAULT: "#e5342a",
+                            dark: "#a5241d",
+                            light: "#ff4c40"
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+
+    <style>
+        body {
+            font-family: "Inter", sans-serif;
+            background: #050505;
+            color: white;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center px-6">
+
+    <div class="w-full max-w-sm">
+        <div class="flex justify-center mb-8">
+            <a href="index.html">
+                <img src="./image/PrimeCuts.png" alt="PrimeCuts Logo" class="h-16 w-auto">
+            </a>
+        </div>
+
+        <div class="bg-cardbg border border-neutral-800 rounded-2xl p-8">
+            <h1 class="font-bebas uppercase text-3xl tracking-wide mb-1">Barber Login</h1>
+            <p class="text-neutral-500 text-sm mb-6">Log in om je afspraken te beheren.</p>
+
+            <form id="loginForm" class="space-y-5">
+                <div>
+                    <label class="block text-xs uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                        E-mail
+                    </label>
+                    <input id="email" type="email" required autocomplete="username"
+                        class="w-full bg-appbg border border-neutral-700 rounded-xl px-4 py-3 focus:outline-none focus:border-accent transition">
+                </div>
+
+                <div>
+                    <label class="block text-xs uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                        Wachtwoord
+                    </label>
+                    <input id="password" type="password" required autocomplete="current-password"
+                        class="w-full bg-appbg border border-neutral-700 rounded-xl px-4 py-3 focus:outline-none focus:border-accent transition">
+                </div>
+
+                <div id="errorMessage" class="hidden rounded-xl border border-red-500 bg-red-900/20 text-red-300 p-3 text-sm"></div>
+
+                <button id="loginBtn" type="submit"
+                    class="w-full py-4 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white font-bold uppercase tracking-wide transition-all duration-300 hover:-translate-y-0.5 rounded-xl">
+                    Inloggen
+                </button>
+            </form>
+        </div>
+
+        <a href="index.html" class="block text-center text-neutral-500 hover:text-accent text-sm mt-6 transition">
+            &larr; Terug naar de website
+        </a>
+    </div>
+
+    <script src="admin-login.js"></script>
+</body>
+</html>

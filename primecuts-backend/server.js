@@ -1,7 +1,7 @@
 require('dotenv').config();
 const app = require('./src/app');
 const connectDB = require('./src/config/db'); // Import the database connection
-const { retryPendingBranchReports } = require('./src/services/branchReporter');
+const { retryPendingBranchReports, retryPendingBranchCancellations } = require('./src/services/branchReporter');
 
 // Connect to MongoDB
 connectDB();
@@ -13,11 +13,14 @@ app.listen(PORT, () => {
     console.log(`Server is running in ${process.env.NODE_ENV || 'production'} mode on port ${PORT}`);
 });
 
-// Picks up Branch.nu transaction reports that failed and are due for a retry, including any that
-// were still pending when the process last restarted.
+// Picks up Branch.nu transaction reports (and cancellations) that failed and are due for a retry,
+// including any that were still pending when the process last restarted.
 const BRANCH_REPORT_SWEEP_INTERVAL_MS = 2 * 60 * 1000;
 setInterval(() => {
     retryPendingBranchReports().catch((error) => {
         console.error('Branch.nu retry sweep failed:', error.message);
+    });
+    retryPendingBranchCancellations().catch((error) => {
+        console.error('Branch.nu cancellation retry sweep failed:', error.message);
     });
 }, BRANCH_REPORT_SWEEP_INTERVAL_MS);
