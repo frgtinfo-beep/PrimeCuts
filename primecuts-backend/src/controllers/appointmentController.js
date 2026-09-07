@@ -10,15 +10,19 @@ const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecuts.onrend
 // Real prices, kept here so we don't trust whatever price the browser sends us.
 // Keep this in sync with the data-price values in frontend/appointment.html.
 const SERVICE_PRICES = {
-  Knipbeurt: 27.36,
-  Baard: 12.36,
-  "Kinderen (t/m 11)": 22.36,
-  Contouren: 12.36,
-  "Fullhead Contour": 17.36,
+  Knipbeurt: 25,
+  Baard: 10,
+  "Kinderen (t/m 11)": 20,
+  Contouren: 10,
+  "Fullhead Contour": 15,
 };
 
 // Customer pays this fraction online as a deposit at booking time; the rest is settled in store.
 const DEPOSIT_RATIO = 0.5;
+// Separate checkout/processing fee, charged on top of the deposit at booking time — never part of
+// the service's own price, and never owed again in store (the in-store balance is service price
+// minus deposit only).
+const CHECKOUT_FEE = 2.36;
 const roundToCents = (amount) => Math.round(amount * 100) / 100;
 // Dutch currency style (comma decimal, always 2 places) — halving an odd euro amount (e.g. €25)
 // produces a .5 deposit that plain interpolation would print as ".5" instead of ",50".
@@ -80,6 +84,7 @@ const buildConfirmationEmailHtml = (appointment) => {
               ${buildDetailRow("Tijd", appointment.time)}
               ${buildDetailRow("Totaal", `&euro;${formatEuro(appointment.totalPrice)}`)}
               ${buildDetailRow("Aanbetaling (betaald)", `&euro;${formatEuro(appointment.depositAmount)}`)}
+              ${buildDetailRow("Reserveringskosten (betaald)", `&euro;${formatEuro(appointment.checkoutFee)}`)}
               ${buildDetailRow("Te betalen in de winkel", `&euro;${formatEuro(remainingBalance)}`, true)}
             </table>
             <p style="margin:24px 0 0;color:#737373;font-size:13px;line-height:1.6;">Tot dan!<br>PrimeCuts Barbershop</p>
@@ -120,6 +125,7 @@ Datum: ${appointment.date}
 Tijd: ${appointment.time}
 Totaal: €${formatEuro(appointment.totalPrice)}
 Aanbetaling (betaald): €${formatEuro(appointment.depositAmount)}
+Reserveringskosten (betaald): €${formatEuro(appointment.checkoutFee)}
 Te betalen in de winkel: €${formatEuro(appointment.totalPrice - appointment.depositAmount)}
 
 Tot dan!
@@ -239,6 +245,9 @@ const createAppointment = async (req, res) => {
     const totalPrice = servicePrice + addonsTotal;
     // Customer only pays this much online now; the rest is settled in person at the shop.
     const depositAmount = roundToCents(totalPrice * DEPOSIT_RATIO);
+    // Charged on top of the deposit, never folded into the service's own price or the in-store balance.
+    const checkoutFee = CHECKOUT_FEE;
+    const amountCharged = roundToCents(depositAmount + checkoutFee);
 
     // Hold the slot while payment is pending so another customer cannot reserve it.
     const existing = await Appointment.findOne({
@@ -263,6 +272,7 @@ const createAppointment = async (req, res) => {
       time,
       totalPrice,
       depositAmount,
+      checkoutFee,
       status: "pending",
       paymentProvider: "sumup",
     });
@@ -277,10 +287,10 @@ const createAppointment = async (req, res) => {
     const checkoutReference = createdAppointment._id.toString();
     const checkout = await sumupClient.checkouts.create({
       checkout_reference: checkoutReference,
-      amount: depositAmount,
+      amount: amountCharged,
       currency: "EUR",
       merchant_code: process.env.SUMUP_MERCHANT_CODE,
-      description: `Aanbetaling PrimeCuts afspraak ${service} op ${date} om ${time} (totaal €${formatEuro(totalPrice)}, rest in winkel)`,
+      description: `Aanbetaling + reserveringskosten PrimeCuts afspraak ${service} op ${date} om ${time} (aanbetaling €${formatEuro(depositAmount)} + €${formatEuro(checkoutFee)} kosten, rest in winkel)`,
       return_url: getPaymentReturnUrl(req),
       redirect_url: getPaymentRedirectUrl(req, checkoutReference),
       hosted_checkout: { enabled: true },

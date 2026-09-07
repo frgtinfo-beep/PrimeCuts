@@ -5,9 +5,12 @@ const sumupClient = new SumUp({
   apiKey: process.env.SUMUP_API_KEY || "",
 });
 
+// Only the deposit is refundable — the checkout/processing fee (see CHECKOUT_FEE in
+// appointmentController.js) is charged separately on top of it and is non-refundable, so this is
+// deliberately a partial refund of the real SumUp charge, not the full transaction amount.
 // The deposit split only exists on bookings made after that feature shipped — for anything older,
-// depositAmount is unset and the customer was actually charged the full totalPrice via SumUp.
-const amountActuallyCharged = (appointment) =>
+// depositAmount is unset and the customer was actually charged (and gets refunded) the full totalPrice.
+const refundableAmount = (appointment) =>
   typeof appointment.depositAmount === "number" ? appointment.depositAmount : appointment.totalPrice;
 
 // branchTransactionId is normally already on the appointment (set as soon as the booking is
@@ -41,7 +44,7 @@ const refundAppointment = async (appointment) => {
       return { status: "skipped", reason: "No successful SumUp transaction found for this booking." };
     }
 
-    const amount = amountActuallyCharged(appointment);
+    const amount = refundableAmount(appointment);
     await sumupClient.transactions.refund(process.env.SUMUP_MERCHANT_CODE, transactionId, { amount });
 
     console.log(`SumUp refund issued for appointment ${appointment._id} (transaction ${transactionId}, €${amount}).`);

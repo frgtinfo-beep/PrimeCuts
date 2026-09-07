@@ -5,7 +5,7 @@ const API_BASE_URL = "";
 // --- 1. STATE MANAGEMENT ---
 let state = {
   service: "Contouren",
-  basePrice: 12.36,
+  basePrice: 10,
   addons: [],
   addonPrice: 0,
   date: "",
@@ -15,6 +15,9 @@ let state = {
 // Customer pays this fraction online now; the rest is settled in store. Must match
 // DEPOSIT_RATIO in primecuts-backend/src/controllers/appointmentController.js.
 const DEPOSIT_RATIO = 0.5;
+// Separate checkout/processing fee, charged on top of the deposit — never part of the service
+// price itself. Must match CHECKOUT_FEE in primecuts-backend/src/controllers/appointmentController.js.
+const CHECKOUT_FEE = 2.36;
 
 // Avoids float drift (e.g. 0.1 + 0.2) when summing/splitting prices.
 function roundToCents(amount) {
@@ -32,6 +35,7 @@ function updateSummaryBar() {
   const total = roundToCents(state.basePrice + state.addonPrice);
   const deposit = roundToCents(total * DEPOSIT_RATIO);
   const remaining = roundToCents(total - deposit);
+  const nowTotal = roundToCents(deposit + CHECKOUT_FEE);
 
   document.getElementById("summary-service").textContent = state.service;
   document.getElementById("summary-date").textContent = state.date || "...";
@@ -44,7 +48,7 @@ function updateSummaryBar() {
 
   document.getElementById("summary-total").textContent = `€${formatEuro(total)}`;
   document.getElementById("summary-deposit-note").textContent =
-    `€${formatEuro(deposit)} nu · €${formatEuro(remaining)} in de winkel`;
+    `€${formatEuro(nowTotal)} nu (incl. €${formatEuro(CHECKOUT_FEE)} kosten) · €${formatEuro(remaining)} in de winkel`;
 }
 
 // --- 3. EVENT LISTENERS: SERVICES ---
@@ -431,10 +435,13 @@ openCheckoutBtn.addEventListener("click", () => {
   const total = roundToCents(state.basePrice + state.addonPrice);
   const deposit = roundToCents(total * DEPOSIT_RATIO);
   const remaining = roundToCents(total - deposit);
+  const nowTotal = roundToCents(deposit + CHECKOUT_FEE);
 
   document.getElementById("modalService").textContent = state.service;
   document.getElementById("modalPrice").textContent = `€${formatEuro(total)}`;
   document.getElementById("modalDeposit").textContent = `€${formatEuro(deposit)}`;
+  document.getElementById("modalFee").textContent = `€${formatEuro(CHECKOUT_FEE)}`;
+  document.getElementById("modalNowTotal").textContent = `€${formatEuro(nowTotal)}`;
   document.getElementById("modalRemaining").textContent = `€${formatEuro(remaining)}`;
 
   bookingContent.classList.remove("hidden");
@@ -474,7 +481,7 @@ bookingForm.addEventListener("submit", async (e) => {
     0,
   );
   const verifiedTotal = roundToCents(verifiedBasePrice + verifiedAddonPrice);
-  // modalPrice is rendered via formatEuro (comma decimal, e.g. "€27,36") — swap back to a dot
+  // modalPrice is rendered via formatEuro (comma decimal, e.g. "€22,50") — swap back to a dot
   // before parsing, since parseFloat stops at the first non-numeric character otherwise.
   const modalDisplayedTotal = parseFloat(
     document.getElementById("modalPrice").textContent.replace("€", "").replace(",", "."),

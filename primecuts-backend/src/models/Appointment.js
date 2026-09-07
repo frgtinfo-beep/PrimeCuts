@@ -10,6 +10,8 @@ const appointmentSchema = new mongoose.Schema({
   time: { type: String, required: true },
   totalPrice: { type: Number, required: true },
   depositAmount: { type: Number, required: true },
+  // Separate checkout/processing fee charged on top of the deposit — never part of totalPrice.
+  checkoutFee: { type: Number },
   paymentProvider: { type: String, default: "sumup" },
   sumupCheckoutId: { type: String },
   sumupCheckoutReference: { type: String },
