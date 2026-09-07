@@ -9,6 +9,7 @@ const appointmentSchema = new mongoose.Schema({
   date: { type: String, required: true },
   time: { type: String, required: true },
   totalPrice: { type: Number, required: true },
+  depositAmount: { type: Number, required: true },
   paymentProvider: { type: String, default: "sumup" },
   sumupCheckoutId: { type: String },
   sumupCheckoutReference: { type: String },

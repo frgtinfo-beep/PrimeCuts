@@ -10,11 +10,19 @@ const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecuts.onrend
 // Real prices, kept here so we don't trust whatever price the browser sends us.
 // Keep this in sync with the data-price values in frontend/appointment.html.
 const SERVICE_PRICES = {
-  Knipbeurt: 25,
-  "Knipbeurt Kinderen": 20,
-  Contour: 10,
-  Baard: 10,
+  Knipbeurt: 27.36,
+  Baard: 12.36,
+  "Kinderen (t/m 11)": 22.36,
+  Contouren: 12.36,
+  "Fullhead Contour": 17.36,
 };
+
+// Customer pays this fraction online as a deposit at booking time; the rest is settled in store.
+const DEPOSIT_RATIO = 0.5;
+const roundToCents = (amount) => Math.round(amount * 100) / 100;
+// Dutch currency style (comma decimal, always 2 places) — halving an odd euro amount (e.g. €25)
+// produces a .5 deposit that plain interpolation would print as ".5" instead of ",50".
+const formatEuro = (amount) => amount.toFixed(2).replace(".", ",");
 
 const ADDON_PRICES = {
   "Baard Trimmen": 5,
@@ -48,6 +56,7 @@ const buildConfirmationEmailHtml = (appointment) => {
     appointment.addons && appointment.addons.length > 0
       ? buildDetailRow("Extra's", appointment.addons.join(", "))
       : "";
+  const remainingBalance = appointment.totalPrice - appointment.depositAmount;
 
   return `<!DOCTYPE html>
 <html>
@@ -69,7 +78,9 @@ const buildConfirmationEmailHtml = (appointment) => {
               ${addonsRow}
               ${buildDetailRow("Datum", appointment.date)}
               ${buildDetailRow("Tijd", appointment.time)}
-              ${buildDetailRow("Totaal", `&euro;${appointment.totalPrice}`, true)}
+              ${buildDetailRow("Totaal", `&euro;${formatEuro(appointment.totalPrice)}`)}
+              ${buildDetailRow("Aanbetaling (betaald)", `&euro;${formatEuro(appointment.depositAmount)}`)}
+              ${buildDetailRow("Te betalen in de winkel", `&euro;${formatEuro(remainingBalance)}`, true)}
             </table>
             <p style="margin:24px 0 0;color:#737373;font-size:13px;line-height:1.6;">Tot dan!<br>PrimeCuts Barbershop</p>
           </td>
@@ -107,7 +118,9 @@ Je afspraak is bevestigd:
 Behandeling: ${appointment.service}${addonsText}
 Datum: ${appointment.date}
 Tijd: ${appointment.time}
-Totaal: €${appointment.totalPrice}
+Totaal: €${formatEuro(appointment.totalPrice)}
+Aanbetaling (betaald): €${formatEuro(appointment.depositAmount)}
+Te betalen in de winkel: €${formatEuro(appointment.totalPrice - appointment.depositAmount)}
 
 Tot dan!
 PrimeCuts`,
@@ -171,7 +184,7 @@ const getAppointmentById = async (req, res) => {
     const appointment = await Appointment.findById(
       req.params.appointmentId,
     ).select(
-      "date time service addons totalPrice status sumupCheckoutId sumupCheckoutReference branchReportStatus branchReportAttempts branchReportLastError",
+      "date time service addons totalPrice depositAmount status sumupCheckoutId sumupCheckoutReference branchReportStatus branchReportAttempts branchReportLastError",
     );
 
     if (!appointment) {
@@ -224,6 +237,8 @@ const createAppointment = async (req, res) => {
     }
 
     const totalPrice = servicePrice + addonsTotal;
+    // Customer only pays this much online now; the rest is settled in person at the shop.
+    const depositAmount = roundToCents(totalPrice * DEPOSIT_RATIO);
 
     // Hold the slot while payment is pending so another customer cannot reserve it.
     const existing = await Appointment.findOne({
@@ -247,6 +262,7 @@ const createAppointment = async (req, res) => {
       date,
       time,
       totalPrice,
+      depositAmount,
       status: "pending",
       paymentProvider: "sumup",
     });
@@ -261,10 +277,10 @@ const createAppointment = async (req, res) => {
     const checkoutReference = createdAppointment._id.toString();
     const checkout = await sumupClient.checkouts.create({
       checkout_reference: checkoutReference,
-      amount: totalPrice,
+      amount: depositAmount,
       currency: "EUR",
       merchant_code: process.env.SUMUP_MERCHANT_CODE,
-      description: `PrimeCuts afspraak ${service} op ${date} om ${time}`,
+      description: `Aanbetaling PrimeCuts afspraak ${service} op ${date} om ${time} (totaal €${formatEuro(totalPrice)}, rest in winkel)`,
       return_url: getPaymentReturnUrl(req),
       redirect_url: getPaymentRedirectUrl(req, checkoutReference),
       hosted_checkout: { enabled: true },
@@ -469,7 +485,7 @@ const getCalendarFeed = async (req, res) => {
         start: startTime,
         end: endTime,
         summary: `${app.service} - ${app.customerName}`,
-        description: `Customer: ${app.customerName}\nPhone: ${app.customerPhone}\nEmail: ${app.customerEmail}\nAdd-ons: ${addOnsText}\nTotal Price: €${app.totalPrice}`,
+        description: `Customer: ${app.customerName}\nPhone: ${app.customerPhone}\nEmail: ${app.customerEmail}\nAdd-ons: ${addOnsText}\nTotal Price: €${app.totalPrice.toFixed(2)}\nDeposit paid online: €${app.depositAmount.toFixed(2)}\nDue in store: €${(app.totalPrice - app.depositAmount).toFixed(2)}`,
         location: "Primecuts Barbershop",
       });
     });

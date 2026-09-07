@@ -4,17 +4,35 @@ const API_BASE_URL = "";
 
 // --- 1. STATE MANAGEMENT ---
 let state = {
-  service: "Contour",
-  basePrice: 10,
+  service: "Contouren",
+  basePrice: 12.36,
   addons: [],
   addonPrice: 0,
   date: "",
   time: null,
 };
 
+// Customer pays this fraction online now; the rest is settled in store. Must match
+// DEPOSIT_RATIO in primecuts-backend/src/controllers/appointmentController.js.
+const DEPOSIT_RATIO = 0.5;
+
+// Avoids float drift (e.g. 0.1 + 0.2) when summing/splitting prices.
+function roundToCents(amount) {
+  return Math.round(amount * 100) / 100;
+}
+
+// Dutch currency style (comma decimal, always 2 places) — needed since halving an odd
+// euro amount (e.g. €25) produces a .50 deposit that plain interpolation prints as ".5".
+function formatEuro(amount) {
+  return amount.toFixed(2).replace(".", ",");
+}
+
 // --- 2. UPDATE DOM FUNCTION ---
 function updateSummaryBar() {
-  const total = state.basePrice + state.addonPrice;
+  const total = roundToCents(state.basePrice + state.addonPrice);
+  const deposit = roundToCents(total * DEPOSIT_RATIO);
+  const remaining = roundToCents(total - deposit);
+
   document.getElementById("summary-service").textContent = state.service;
   document.getElementById("summary-date").textContent = state.date || "...";
 
@@ -24,7 +42,9 @@ function updateSummaryBar() {
     document.getElementById("summary-time").textContent = "Kies tijd";
   }
 
-  document.getElementById("summary-total").textContent = `€${total}`;
+  document.getElementById("summary-total").textContent = `€${formatEuro(total)}`;
+  document.getElementById("summary-deposit-note").textContent =
+    `€${formatEuro(deposit)} nu · €${formatEuro(remaining)} in de winkel`;
 }
 
 // --- 3. EVENT LISTENERS: SERVICES ---
@@ -46,7 +66,7 @@ serviceCards.forEach((card) => {
     card.querySelector(".icon").classList.add("text-accent");
 
     state.service = card.getAttribute("data-service");
-    state.basePrice = parseInt(card.getAttribute("data-price"));
+    state.basePrice = parseFloat(card.getAttribute("data-price"));
     updateSummaryBar();
   });
 });
@@ -56,7 +76,7 @@ const addonCheckboxes = document.querySelectorAll(".addon-checkbox");
 addonCheckboxes.forEach((checkbox) => {
   checkbox.addEventListener("change", (e) => {
     const addonName = e.target.getAttribute("data-addon");
-    const price = parseInt(e.target.getAttribute("data-price"));
+    const price = parseFloat(e.target.getAttribute("data-price"));
 
     if (e.target.checked) {
       state.addons.push(addonName);
@@ -370,7 +390,7 @@ async function showPaymentReturnState() {
     if (data.data.status === "confirmed") {
       errorMessage.classList.add("hidden");
       successContent.classList.remove("hidden");
-      successText.textContent = `Betaling ontvangen. Je afspraak staat vast op ${data.data.date} om ${data.data.time}.`;
+      successText.textContent = `Betaling ontvangen. Je afspraak staat vast op ${data.data.date} om ${data.data.time}. Nog te betalen in de winkel: €${formatEuro(data.data.totalPrice - data.data.depositAmount)}.`;
       return;
     }
 
@@ -387,7 +407,7 @@ async function showPaymentReturnState() {
     if (cancelData.status === "confirmed") {
       errorMessage.classList.add("hidden");
       successContent.classList.remove("hidden");
-      successText.textContent = `Betaling ontvangen. Je afspraak staat vast op ${data.data.date} om ${data.data.time}.`;
+      successText.textContent = `Betaling ontvangen. Je afspraak staat vast op ${data.data.date} om ${data.data.time}. Nog te betalen in de winkel: €${formatEuro(data.data.totalPrice - data.data.depositAmount)}.`;
     } else if (cancelData.status === "released" || cancelData.status === "collision") {
       successContent.classList.add("hidden");
       errorMessage.classList.remove("hidden");
@@ -408,9 +428,14 @@ async function showPaymentReturnState() {
 
 openCheckoutBtn.addEventListener("click", () => {
   if (!state.time) return;
+  const total = roundToCents(state.basePrice + state.addonPrice);
+  const deposit = roundToCents(total * DEPOSIT_RATIO);
+  const remaining = roundToCents(total - deposit);
+
   document.getElementById("modalService").textContent = state.service;
-  document.getElementById("modalPrice").textContent =
-    `€${state.basePrice + state.addonPrice}`;
+  document.getElementById("modalPrice").textContent = `€${formatEuro(total)}`;
+  document.getElementById("modalDeposit").textContent = `€${formatEuro(deposit)}`;
+  document.getElementById("modalRemaining").textContent = `€${formatEuro(remaining)}`;
 
   bookingContent.classList.remove("hidden");
   successContent.classList.add("hidden");
@@ -442,20 +467,22 @@ bookingForm.addEventListener("submit", async (e) => {
     ".addon-checkbox:checked",
   );
   const verifiedBasePrice = selectedCard
-    ? parseInt(selectedCard.getAttribute("data-price"))
+    ? parseFloat(selectedCard.getAttribute("data-price"))
     : NaN;
   const verifiedAddonPrice = Array.from(checkedAddonBoxes).reduce(
-    (sum, box) => sum + parseInt(box.getAttribute("data-price")),
+    (sum, box) => sum + parseFloat(box.getAttribute("data-price")),
     0,
   );
-  const verifiedTotal = verifiedBasePrice + verifiedAddonPrice;
-  const modalDisplayedTotal = parseInt(
-    document.getElementById("modalPrice").textContent.replace("€", ""),
+  const verifiedTotal = roundToCents(verifiedBasePrice + verifiedAddonPrice);
+  // modalPrice is rendered via formatEuro (comma decimal, e.g. "€27,36") — swap back to a dot
+  // before parsing, since parseFloat stops at the first non-numeric character otherwise.
+  const modalDisplayedTotal = parseFloat(
+    document.getElementById("modalPrice").textContent.replace("€", "").replace(",", "."),
   );
 
   if (
     !Number.isFinite(verifiedTotal) ||
-    verifiedTotal !== state.basePrice + state.addonPrice ||
+    verifiedTotal !== roundToCents(state.basePrice + state.addonPrice) ||
     verifiedTotal !== modalDisplayedTotal
   ) {
     errorMessage.textContent =

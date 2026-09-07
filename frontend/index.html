@@ -262,7 +262,7 @@
             <img
               src="./image/PrimeCuts.png"
               alt="Primecuts Logo"
-              class="h-10 md:h-12 w-auto drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]"
+              class="h-14 md:h-16 w-auto drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]"
             />
           </a>
 
@@ -485,18 +485,6 @@
             );
         "
       ></div>
-      <div
-        class="absolute inset-0 z-10 pointer-events-none"
-        style="
-          background-image: repeating-linear-gradient(
-            -55deg,
-            transparent 0 46px,
-            rgba(255, 255, 255, 0.03) 46px 47px
-          );
-          mask-image: linear-gradient(90deg, black, black 55%, transparent);
-        "
-      ></div>
-
       <!-- Content -->
       <div
         class="relative z-20 h-full max-w-7xl mx-auto flex items-center justify-start px-6 md:px-12"
@@ -572,8 +560,8 @@
               class="px-7 py-4 font-mono text-[11px] text-white/50 tracking-wide"
             >
               <span class="block font-bebas text-2xl text-white tracking-wide"
-                >&euro;10</span
-              ><span data-i18n="hero.stat3Label">voor Contour</span>
+                >&euro;12,36</span
+              ><span data-i18n="hero.stat3Label">voor Contouren</span>
             </div>
           </div>
         </div>
@@ -648,11 +636,11 @@
             </div>
             <div class="my-8">
               <span class="chrome-text font-bebas text-7xl"
-                ><sup class="text-2xl align-top">&euro;</sup>25</span
+                ><sup class="text-2xl align-top">&euro;</sup>27<sup class="text-2xl align-top">,36</sup></span
               >
             </div>
             <a
-              href="appointment.html?service=Knipbeurt&price=25"
+              href="appointment.html?service=Knipbeurt&price=27.36"
               data-i18n="action.bookAppointment"
               class="btn-corner block text-center w-full py-4 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white font-bold uppercase text-sm tracking-wide transition duration-300 hover:-translate-y-0.5"
             >
@@ -674,19 +662,19 @@
               <h3
                 class="font-bebas uppercase text-3xl text-white mt-3 mb-2 tracking-wide"
               >
-                Knipbeurt Kinderen
+                Kinderen (t/m 11)
               </h3>
               <p class="text-white/50 text-sm" data-i18n="services.card2.desc1">
-                Kinderen tot 12 jaar
+                Kinderen t/m 11 jaar
               </p>
             </div>
             <div class="my-8">
               <span class="chrome-text font-bebas text-7xl"
-                ><sup class="text-2xl align-top">&euro;</sup>20</span
+                ><sup class="text-2xl align-top">&euro;</sup>22<sup class="text-2xl align-top">,36</sup></span
               >
             </div>
             <a
-              href="appointment.html?service=Knipbeurt%20Kinderen&price=20"
+              href="appointment.html?service=Kinderen%20(t%2Fm%2011)&price=22.36"
               data-i18n="action.bookAppointment"
               class="block text-center w-full py-4 border border-white/25 bg-white/5 backdrop-blur-md text-white font-bold uppercase text-sm tracking-wide transition duration-300 hover:bg-white hover:text-black"
             >
@@ -708,7 +696,7 @@
               <h3
                 class="font-bebas uppercase text-3xl text-white mt-3 mb-2 tracking-wide"
               >
-                Contour
+                Contouren
               </h3>
               <p class="text-white/50 text-sm" data-i18n="services.card3.desc1">
                 Verse contourlijn &amp; detaillering
@@ -716,11 +704,11 @@
             </div>
             <div class="my-8">
               <span class="chrome-text font-bebas text-7xl"
-                ><sup class="text-2xl align-top">&euro;</sup>10</span
+                ><sup class="text-2xl align-top">&euro;</sup>12<sup class="text-2xl align-top">,36</sup></span
               >
             </div>
             <a
-              href="appointment.html?service=Contour&price=10"
+              href="appointment.html?service=Contouren&price=12.36"
               data-i18n="action.bookAppointment"
               class="block text-center w-full py-4 border border-white/25 bg-white/5 backdrop-blur-md text-white font-bold uppercase text-sm tracking-wide transition duration-300 hover:bg-white hover:text-black"
             >
@@ -732,9 +720,9 @@
     </section>
 
     <!-- =======================
-         3. GALLERY SECTION
+         3. GALLERY SECTION (hidden for now)
     ======================== -->
-    <section class="relative py-24 px-6 md:px-12 bg-black overflow-hidden">
+    <section class="hidden relative py-24 px-6 md:px-12 bg-black overflow-hidden">
       <div class="relative z-10 max-w-7xl mx-auto">
         <div
           class="flex flex-wrap justify-between items-end gap-6 mb-14 reveal"
@@ -1061,10 +1049,10 @@
           </h3>
           <ul class="space-y-3 text-white/50 text-sm font-mono">
             <li class="flex justify-between">
-              <span data-i18n="footer.monFri">Ma - Vr</span><span>-</span>
+              <span data-i18n="footer.monFri">Ma - Vr</span><span data-i18n="footer.monFriHours">11:00 - 19:00</span>
             </li>
             <li class="flex justify-between">
-              <span data-i18n="footer.saturday">Zaterdag</span><span>-</span>
+              <span data-i18n="footer.saturday">Zaterdag</span><span data-i18n="footer.closed">Gesloten</span>
             </li>
             <li class="flex justify-between">
               <span data-i18n="footer.sunday">Zondag</span
@@ -1227,7 +1215,7 @@
           "hero.stat1Label": "Beoordeling",
           "hero.stat2Value": "3JR",
           "hero.stat2Label": "Ervaring",
-          "hero.stat3Label": "voor Contour",
+          "hero.stat3Label": "voor Contouren",
           "services.eyebrow": "Tarieven — Prijzen",
           "services.title": "Onze Diensten",
           "services.subtitle":
@@ -1237,7 +1225,7 @@
           "services.card1.desc1": "Inclusief styling",
           "services.card1.desc2": "Baard + &euro;5",
           "services.card2.num": "NR. 02 — KINDEREN",
-          "services.card2.desc1": "Kinderen tot 12 jaar",
+          "services.card2.desc1": "Kinderen t/m 11 jaar",
           "services.card3.num": "NR. 03 — SNEL",
           "services.card3.desc1": "Verse contourlijn &amp; detaillering",
           "gallery.eyebrow": "Het Werk",
@@ -1261,6 +1249,7 @@
           "footer.hours": "Openingstijden",
           "footer.country": "Nederland",
           "footer.monFri": "Ma - Vr",
+          "footer.monFriHours": "11:00 - 19:00",
           "footer.saturday": "Zaterdag",
           "footer.sunday": "Zondag",
           "footer.closed": "Gesloten",
@@ -1282,7 +1271,7 @@
           "hero.stat1Label": "Rating",
           "hero.stat2Value": "3YR",
           "hero.stat2Label": "Experience",
-          "hero.stat3Label": "for Contour",
+          "hero.stat3Label": "for Contouren",
           "services.eyebrow": "Rates — Pricing",
           "services.title": "Our Services",
           "services.subtitle":
@@ -1292,7 +1281,7 @@
           "services.card1.desc1": "Styling included",
           "services.card1.desc2": "Beard + &euro;5",
           "services.card2.num": "NO. 02 — KIDS",
-          "services.card2.desc1": "Kids up to 12 years",
+          "services.card2.desc1": "Kids up to and including 11 years",
           "services.card3.num": "NO. 03 — QUICK",
           "services.card3.desc1": "Fresh contour line &amp; detailing",
           "gallery.eyebrow": "The Work",
@@ -1316,6 +1305,7 @@
           "footer.hours": "Opening Hours",
           "footer.country": "Netherlands",
           "footer.monFri": "Mon - Fri",
+          "footer.monFriHours": "11:00 - 19:00",
           "footer.saturday": "Saturday",
           "footer.sunday": "Sunday",
           "footer.closed": "Closed",
