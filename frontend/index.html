@@ -3,7 +3,61 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title data-i18n="meta.title">Primecuts | Startpagina</title>
+    <title data-i18n="meta.title">Black Barber Lelystad | PrimeCuts Kapper &amp; Fresh Fades</title>
+    <meta
+      name="description"
+      content="PrimeCuts is dé black barber in Lelystad. Onze kapper staat voor fresh fades, scherpe contouren en baardstyling. Boek eenvoudig je afspraak online."
+    />
+    <link rel="canonical" href="https://primecutsnl.nl/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="nl_NL" />
+    <meta property="og:url" content="https://primecutsnl.nl/" />
+    <meta property="og:site_name" content="PrimeCuts" />
+    <meta property="og:title" content="Black Barber Lelystad | PrimeCuts Kapper &amp; Fresh Fades" />
+    <meta
+      property="og:description"
+      content="PrimeCuts is dé black barber in Lelystad. Onze kapper staat voor fresh fades, scherpe contouren en baardstyling. Boek eenvoudig je afspraak online."
+    />
+    <meta property="og:image" content="https://primecutsnl.nl/image/PrimeCuts.png" />
+
+    <!-- Local business structured data, for Google's local pack / knowledge panel -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "HairSalon",
+        "name": "PrimeCuts",
+        "alternateName": "PrimeCuts Barbershop",
+        "description": "Black barber en kapper in Lelystad, gespecialiseerd in fresh fades, contouren en baardstyling.",
+        "image": "https://primecutsnl.nl/image/PrimeCuts.png",
+        "url": "https://primecutsnl.nl/",
+        "telephone": "+31624469649",
+        "email": "info@primecuts.nl",
+        "priceRange": "€€",
+        "sameAs": [
+          "https://www.instagram.com/primecutsnl/",
+          "https://www.tiktok.com/@primecutsnl"
+        ],
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "Ketelmeerstraat 106",
+          "postalCode": "8226 JX",
+          "addressLocality": "Lelystad",
+          "addressCountry": "NL"
+        },
+        "areaServed": "Lelystad",
+        "openingHoursSpecification": [
+          {
+            "@type": "OpeningHoursSpecification",
+            "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+            "opens": "11:00",
+            "closes": "19:00"
+          }
+        ]
+      }
+    </script>
+
     <!-- Tailwind CSS Play CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Custom configuration -->
@@ -490,6 +544,13 @@
         class="relative z-20 h-full max-w-7xl mx-auto flex items-center justify-start px-6 md:px-12"
       >
         <div class="max-w-2xl text-left">
+          <span
+            class="inline-flex items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.22em] uppercase text-accent mb-4"
+          >
+            <span class="w-5 h-0.5 bg-accent inline-block"></span
+            ><span data-i18n="hero.eyebrow">Kapper Lelystad</span>
+          </span>
+
           <h1
             class="chrome-text text-white text-5xl md:text-7xl font-bebas uppercase leading-[0.95] mb-8"
           >
@@ -502,8 +563,10 @@
             class="text-white/60 max-w-md mb-10 text-base md:text-lg leading-relaxed"
             data-i18n="hero.subtitle"
           >
-            fades, afwerking met hete handdoek en baardstyling door barbiers die
-            elke stoel behandelen als wedstrijddag.
+            Word de beste versie van jezelf bij PrimeCuts, dé kapper en black
+            barber in Lelystad. Fresh fades, afwerking met hete handdoek en
+            baardstyling door barbiers die elke stoel behandelen als
+            wedstrijddag.
           </p>
 
           <div class="flex flex-wrap items-center gap-4 mb-14">
@@ -600,8 +663,8 @@
             class="text-white/50 max-w-xs text-sm leading-relaxed"
             data-i18n="services.subtitle"
           >
-            Elke kaart hieronder is een plek in de stoel — kies je nummer, neem
-            je plaats.
+            Elke kaart hieronder is een plek in de stoel bij onze kapper in
+            Lelystad — kies je nummer, neem je plaats.
           </p>
         </div>
 
@@ -1032,8 +1095,8 @@
             class="relative mt-6 max-w-2xl mx-auto text-lg text-white/60 leading-relaxed"
             data-i18n="cta.subtitle"
           >
-            Loop naar buiten met een strakke fade en een baardtrim. Boek vandaag
-            nog je afspraak.
+            Loop naar buiten met een fresh fade en een baardtrim van jouw
+            kapper in Lelystad. Boek vandaag nog je afspraak.
           </p>
           <div class="relative mt-12">
             <a
@@ -1043,6 +1106,64 @@
               <span data-i18n="action.bookAppointment">Boek Afspraak</span>
               <span class="text-xl">→</span>
             </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================
+         4b. LOCATION / MAP SECTION
+    ======================== -->
+    <section class="relative py-24 px-6 md:px-12 bg-black overflow-hidden">
+      <div class="relative z-10 max-w-7xl mx-auto">
+        <div class="mb-10 reveal">
+          <span
+            class="inline-flex items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.22em] uppercase text-accent"
+          >
+            <span class="w-5 h-0.5 bg-accent inline-block"></span
+            ><span>Vind Ons</span>
+          </span>
+          <h2 class="chrome-text text-white font-bebas uppercase text-4xl md:text-5xl mt-4">
+            <span class="slant">Onze Kapper In Lelystad</span>
+          </h2>
+        </div>
+
+        <div class="grid md:grid-cols-[360px_1fr] gap-8 reveal">
+          <div
+            class="glass-service-card relative flex flex-col justify-between p-10"
+          >
+            <div>
+              <h3 class="font-bebas uppercase text-2xl text-white mb-4 tracking-wide">
+                Ketelmeerstraat 106
+              </h3>
+              <p class="text-white/50 text-sm leading-relaxed mb-1">
+                8226 JX Lelystad, Nederland
+              </p>
+              <p class="text-white/50 text-sm leading-relaxed mt-4">
+                Ma&nbsp;-&nbsp;Vr: 11:00 - 19:00<br />
+                Zaterdag &amp; Zondag: Gesloten
+              </p>
+            </div>
+            <a
+              href="https://www.google.com/maps/dir/?api=1&destination=Ketelmeerstraat+106,+8226+JX+Lelystad"
+              target="_blank"
+              rel="noopener"
+              class="btn-corner mt-8 inline-flex items-center justify-center gap-2 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white font-bold uppercase text-sm tracking-wide py-3 transition-all duration-300 hover:-translate-y-0.5"
+            >
+              Route Plannen
+            </a>
+          </div>
+
+          <div class="rounded-none overflow-hidden border border-white/10 h-[360px] md:h-auto">
+            <iframe
+              title="PrimeCuts Barbershop locatie in Lelystad"
+              src="https://maps.google.com/maps?q=Ketelmeerstraat+106,+8226+JX+Lelystad&t=&z=15&ie=UTF8&iwloc=&output=embed"
+              width="100%"
+              height="100%"
+              style="border: 0; filter: grayscale(1) invert(0.9) contrast(0.9)"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+            ></iframe>
           </div>
         </div>
       </div>
@@ -1074,6 +1195,12 @@
             <li>8226 JX Lelystad</li>
             <li data-i18n="footer.country">Nederland</li>
           </ul>
+          <p
+            class="text-white/40 text-xs font-mono mt-4 leading-relaxed"
+            data-i18n="footer.visitTagline"
+          >
+            kapper in het hart van Lelystad.
+          </p>
         </div>
         <div>
           <h3
@@ -1084,8 +1211,8 @@
           </h3>
           <ul class="space-y-3 text-white/50 text-sm font-mono">
             <li>
-              <a href="tel:+31612345678" class="hover:text-accent transition"
-                >+31 6 12345678</a
+              <a href="tel:+31624469649" class="hover:text-accent transition"
+                >+31 6 24469649</a
               >
             </li>
             <li>
@@ -1140,9 +1267,18 @@
           </p>
           <div class="flex items-center gap-8">
             <a
-              href="#"
+              href="https://www.instagram.com/primecutsnl/"
+              target="_blank"
+              rel="noopener"
               class="text-white/50 hover:text-accent transition font-mono text-sm"
               >Instagram</a
+            >
+            <a
+              href="https://www.tiktok.com/@primecutsnl"
+              target="_blank"
+              rel="noopener"
+              class="text-white/50 hover:text-accent transition font-mono text-sm"
+              >TikTok</a
             >
             <a
               href="admin-login.html"
@@ -1273,14 +1409,14 @@
 
       const translations = {
         nl: {
-          "meta.title": "Primecuts | Startpagina",
+          "meta.title": "Barber Lelystad | PrimeCuts Kapper &amp; Fresh Fades",
           "nav.home": "Home",
           "nav.book": "Afspraak Maken",
           "nav.bookNow": "Boek Nu",
-          "hero.eyebrow": "Lelystad — Kapperszaak",
+          "hero.eyebrow": "Kapper Lelystad",
           "hero.title": "Word De Beste<br>Versie Van Jezelf",
           "hero.subtitle":
-            " fades, afwerking met hete handdoek en baardstyling door barbiers die elke stoel behandelen als wedstrijddag.",
+            "Word de beste versie van jezelf bij PrimeCuts, dé kapper in Lelystad. Fresh fades, afwerking met hete handdoek en baardstyling door barbiers die elke stoel behandelen als wedstrijddag.",
           "hero.cta1": "Boek Je Knipbeurt →",
           "hero.cta2": "Bekijk Diensten",
           "hero.stat1Label": "Beoordeling",
@@ -1290,7 +1426,7 @@
           "services.eyebrow": "Tarieven — Prijzen",
           "services.title": "Onze Diensten",
           "services.subtitle":
-            "Elke kaart hieronder is een plek in de stoel — kies je nummer, neem je plaats.",
+            "Elke kaart hieronder is een plek in de stoel bij onze kapper in Lelystad — kies je nummer, neem je plaats.",
           "services.ribbon": "MEEST GEBOEKT",
           "services.card1.num": "NR. 01 — VOLWASSENE",
           "services.card1.desc1": "Inclusief styling",
@@ -1313,9 +1449,10 @@
           "gallery.item4.sub": "Volledige detaillering",
           "cta.title": "Klaar Voor Je<br>Volgende Knipbeurt?",
           "cta.subtitle":
-            "Loop naar buiten met een strakke fade en een  baardtrim. Boek vandaag nog je afspraak.",
+            "Loop naar buiten met een fresh fade en een baardtrim van jouw kapper in Lelystad. Boek vandaag nog je afspraak.",
           "action.bookAppointment": "Boek Afspraak",
           "footer.visit": "Bezoek Ons",
+          "footer.visitTagline": "Barber &amp; kapper in het hart van Lelystad.",
           "footer.contact": "Contact",
           "footer.hours": "Openingstijden",
           "footer.country": "Nederland",
@@ -1330,14 +1467,14 @@
           "footer.barberLogin": "Barber Login",
         },
         en: {
-          "meta.title": "Primecuts | Home",
+          "meta.title": "Barber Lelystad | PrimeCuts Barbershop &amp; Fresh Fades",
           "nav.home": "Home",
           "nav.book": "Book Appointment",
           "nav.bookNow": "Book Now",
-          "hero.eyebrow": "Lelystad — Barbershop",
+          "hero.eyebrow": "Kapper Lelystad",
           "hero.title": "Become The Best<br>Version Of Yourself",
           "hero.subtitle":
-            " fades, hot towel finishes, and beard styling from barbers who treat every chair like game day.",
+            "Become the best version of yourself at PrimeCuts, Lelystad's go-to barber. Fresh fades, hot towel finishes, and beard styling from barbers who treat every chair like game day.",
           "hero.cta1": "Book Your Cut →",
           "hero.cta2": "View Services",
           "hero.stat1Label": "Rating",
@@ -1373,6 +1510,7 @@
             "Walk out with a sharp fade and a clean beard trim. Book your appointment today.",
           "action.bookAppointment": "Book Appointment",
           "footer.visit": "Visit Us",
+          "footer.visitTagline": "Barber &amp; kapper in the heart of Lelystad.",
           "footer.contact": "Contact",
           "footer.hours": "Opening Hours",
           "footer.country": "Netherlands",
