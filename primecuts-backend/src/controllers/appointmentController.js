@@ -1,9 +1,11 @@
 const { isValidObjectId } = require("mongoose");
 const nodemailer = require("nodemailer");
 const Appointment = require("../models/Appointment");
+const BlockedTime = require("../models/BlockedTime");
 const ical = require("ical-generator").default;
 const { default: SumUp } = require("@sumup/sdk");
 const { scheduleBranchReport } = require("../services/branchReporter");
+const { overlapsBlockedRange } = require("../utils/timeOverlap");
 
 const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecuts.onrender.com").replace(/\/$/, "");
 
@@ -178,8 +180,13 @@ const getAppointments = async (req, res) => {
     if (date) query.date = date;
 
     // Anyone can call this to check open times, so only send back the time, never customer info
-    const appointments = await Appointment.find(query).select("date time -_id");
-    res.status(200).json({ success: true, data: appointments });
+    const [appointments, blockedRanges] = await Promise.all([
+      Appointment.find(query).select("date time -_id"),
+      date
+        ? BlockedTime.find({ date }).select("startTime endTime -_id")
+        : Promise.resolve([]),
+    ]);
+    res.status(200).json({ success: true, data: appointments, blockedRanges });
   } catch (error) {
     res.status(500).json({ success: false, error: "Server Error" });
   }
@@ -221,9 +228,17 @@ const createAppointment = async (req, res) => {
     } = req.body;
 
     // date/time feed straight into a Mongo query below — reject anything that isn't a plain string
-    // so a crafted object (e.g. { "$ne": null }) can't be read as a query operator.
-    if (typeof date !== "string" || typeof time !== "string") {
+    // so a crafted object (e.g. { "$ne": null }) can't be read as a query operator. Also enforces
+    // the HH:MM shape the blocked-time overlap check below assumes.
+    if (typeof date !== "string" || typeof time !== "string" || !/^\d{2}:\d{2}$/.test(time)) {
       return res.status(400).json({ error: "Invalid date or time." });
+    }
+
+    // The frontend already hides slots inside an admin's blocked window, but re-check server-side
+    // so it can't be bypassed by calling this endpoint directly.
+    const blockedRanges = await BlockedTime.find({ date }).select("startTime endTime -_id");
+    if (overlapsBlockedRange(time, blockedRanges)) {
+      return res.status(400).json({ error: "This time slot is not available." });
     }
 
     // Work out the price ourselves instead of trusting the price sent from the browser

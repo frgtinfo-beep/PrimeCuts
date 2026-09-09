@@ -1,8 +1,10 @@
 const bcrypt = require("bcryptjs");
 const Appointment = require("../models/Appointment");
+const BlockedTime = require("../models/BlockedTime");
 const { sendCancellationEmail } = require("../services/cancellationEmail");
 const { scheduleBranchCancellation } = require("../services/branchReporter");
 const { refundAppointment } = require("../services/refundService");
+const { overlapsBlockedRange } = require("../utils/timeOverlap");
 
 const login = async (req, res) => {
   try {
@@ -91,10 +93,79 @@ const cancelAppointmentByAdmin = async (req, res) => {
   }
 };
 
+// Only ever shows today onward — a block for a day that's already passed has nothing left to guard.
+const listBlockedTimes = async (req, res) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const blockedTimes = await BlockedTime.find({ date: { $gte: today } }).sort({
+      date: 1,
+      startTime: 1,
+    });
+    res.json({ success: true, data: blockedTimes });
+  } catch (error) {
+    console.error("Admin list blocked times error:", error);
+    res.status(500).json({ error: "Kon geblokkeerde tijden niet laden." });
+  }
+};
+
+const createBlockedTime = async (req, res) => {
+  try {
+    const { date, startTime, endTime, reason } = req.body || {};
+
+    const isDate = typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date);
+    const isTime = (t) => typeof t === "string" && /^\d{2}:\d{2}$/.test(t);
+
+    if (!isDate || !isTime(startTime) || !isTime(endTime)) {
+      return res.status(400).json({ error: "Ongeldige datum of tijd." });
+    }
+    if (startTime >= endTime) {
+      return res.status(400).json({ error: "Starttijd moet voor eindtijd liggen." });
+    }
+
+    const blockedTime = await BlockedTime.create({
+      date,
+      startTime,
+      endTime,
+      reason: typeof reason === "string" && reason.trim() ? reason.trim().slice(0, 200) : undefined,
+    });
+
+    // Doesn't touch any existing booking in this window — just flags it so the admin can decide
+    // (call the customer, cancel it manually) rather than silently cancelling a paid appointment.
+    const conflictingAppointments = await Appointment.find({
+      date,
+      status: "confirmed",
+    }).select("time customerName customerPhone -_id");
+    const conflicts = conflictingAppointments.filter((appointment) =>
+      overlapsBlockedRange(appointment.time, [{ startTime, endTime }]),
+    );
+
+    res.status(201).json({ success: true, data: blockedTime, conflicts });
+  } catch (error) {
+    console.error("Admin create blocked time error:", error);
+    res.status(500).json({ error: "Blokkeren mislukt." });
+  }
+};
+
+const deleteBlockedTime = async (req, res) => {
+  try {
+    const blockedTime = await BlockedTime.findByIdAndDelete(req.params.blockedTimeId);
+    if (!blockedTime) {
+      return res.status(404).json({ error: "Geblokkeerde tijd niet gevonden." });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Admin delete blocked time error:", error);
+    res.status(500).json({ error: "Verwijderen mislukt." });
+  }
+};
+
 module.exports = {
   login,
   logout,
   checkSession,
   listAppointments,
   cancelAppointmentByAdmin,
+  listBlockedTimes,
+  createBlockedTime,
+  deleteBlockedTime,
 };

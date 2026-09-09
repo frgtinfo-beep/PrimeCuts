@@ -8,7 +8,20 @@ const lastUpdated = document.getElementById("lastUpdated");
 const refreshBtn = document.getElementById("refreshBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const searchInput = document.getElementById("searchInput");
+const searchWrap = document.getElementById("searchWrap");
 const tabButtons = document.querySelectorAll(".tab-btn");
+const appointmentsView = document.getElementById("appointmentsView");
+const availabilityView = document.getElementById("availabilityView");
+
+const blockForm = document.getElementById("blockForm");
+const blockDate = document.getElementById("blockDate");
+const blockStart = document.getElementById("blockStart");
+const blockEnd = document.getElementById("blockEnd");
+const blockReason = document.getElementById("blockReason");
+const blockError = document.getElementById("blockError");
+const blockSubmitBtn = document.getElementById("blockSubmitBtn");
+const blockedTimesList = document.getElementById("blockedTimesList");
+const blockedEmptyState = document.getElementById("blockedEmptyState");
 
 const cancelModal = document.getElementById("cancelModal");
 const cancelModalText = document.getElementById("cancelModalText");
@@ -31,7 +44,8 @@ function showToast(message, variant) {
 }
 
 let allAppointments = [];
-let activeTab = "active"; // "active" = date still upcoming, "past" = date already passed
+let allBlockedTimes = [];
+let activeTab = "active"; // "active" | "past" | "availability"
 let pendingCancelId = null;
 
 function formatEuro(amount) {
@@ -138,6 +152,17 @@ function currentlyVisibleAppointments() {
 
 function renderCurrentView() {
   updateTabStyles();
+
+  const isAvailability = activeTab === "availability";
+  appointmentsView.classList.toggle("hidden", isAvailability);
+  availabilityView.classList.toggle("hidden", !isAvailability);
+  searchWrap.classList.toggle("hidden", isAvailability);
+
+  if (isAvailability) {
+    renderBlockedTimes();
+    return;
+  }
+
   const visible = currentlyVisibleAppointments();
 
   if (visible.length === 0) {
@@ -153,6 +178,112 @@ function renderCurrentView() {
     btn.addEventListener("click", () => openCancelModal(btn.getAttribute("data-cancel-id")));
   });
 }
+
+function blockedTimeCard(blockedTime) {
+  const reasonText = blockedTime.reason ? ` — ${blockedTime.reason}` : "";
+  return `
+    <div class="bg-cardbg border border-neutral-800 rounded-2xl p-5 flex flex-wrap justify-between items-center gap-4">
+      <div>
+        <span class="font-bebas text-lg tracking-wide">${blockedTime.date}</span>
+        <span class="text-neutral-400 text-sm ml-2">${blockedTime.startTime} - ${blockedTime.endTime}${reasonText}</span>
+      </div>
+      <button type="button" data-delete-block-id="${blockedTime._id}"
+        class="delete-block-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-900 text-red-400 hover:bg-red-900/20 transition text-xs font-semibold uppercase tracking-wide">
+        <i class="fa-solid fa-trash"></i> Verwijderen
+      </button>
+    </div>`;
+}
+
+function renderBlockedTimes() {
+  if (allBlockedTimes.length === 0) {
+    blockedTimesList.innerHTML = "";
+    blockedEmptyState.classList.remove("hidden");
+    return;
+  }
+
+  blockedEmptyState.classList.add("hidden");
+  blockedTimesList.innerHTML = allBlockedTimes.map(blockedTimeCard).join("");
+
+  document.querySelectorAll(".delete-block-btn").forEach((btn) => {
+    btn.addEventListener("click", () => deleteBlockedTime(btn.getAttribute("data-delete-block-id")));
+  });
+}
+
+async function fetchBlockedTimes() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/admin/blocked-times`);
+    if (response.status === 401) {
+      window.location.href = "admin-login.html";
+      return;
+    }
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Kon geblokkeerde tijden niet laden.");
+    }
+    allBlockedTimes = data.data;
+    if (activeTab === "availability") renderBlockedTimes();
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+async function deleteBlockedTime(blockedTimeId) {
+  if (!confirm("Deze geblokkeerde tijd verwijderen?")) return;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/admin/blocked-times/${blockedTimeId}`, {
+      method: "DELETE",
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Verwijderen mislukt.");
+    }
+    await fetchBlockedTimes();
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+blockForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  blockError.classList.add("hidden");
+  blockSubmitBtn.disabled = true;
+  blockSubmitBtn.textContent = "Bezig...";
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/admin/blocked-times`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: blockDate.value,
+        startTime: blockStart.value,
+        endTime: blockEnd.value,
+        reason: blockReason.value,
+      }),
+    });
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Blokkeren mislukt.");
+    }
+
+    blockForm.reset();
+    await fetchBlockedTimes();
+
+    if (data.conflicts && data.conflicts.length > 0) {
+      const names = data.conflicts.map((a) => `${a.time} (${a.customerName})`).join(", ");
+      showToast(`Geblokkeerd — let op: ${data.conflicts.length} bestaande afspraak(en) valt/vallen hierin: ${names}`, "warn");
+    } else {
+      showToast("Tijd geblokkeerd.", "success");
+    }
+  } catch (error) {
+    blockError.textContent = error.message;
+    blockError.classList.remove("hidden");
+  } finally {
+    blockSubmitBtn.disabled = false;
+    blockSubmitBtn.textContent = "Blokkeren";
+  }
+});
 
 async function fetchAppointments() {
   try {
@@ -236,7 +367,10 @@ tabButtons.forEach((btn) => {
 
 searchInput.addEventListener("input", renderCurrentView);
 
-refreshBtn.addEventListener("click", fetchAppointments);
+refreshBtn.addEventListener("click", () => {
+  fetchAppointments();
+  fetchBlockedTimes();
+});
 
 logoutBtn.addEventListener("click", async () => {
   await fetch(`${API_BASE_URL}/api/admin/logout`, { method: "POST" });
@@ -252,6 +386,9 @@ logoutBtn.addEventListener("click", async () => {
   }
 
   updateTabStyles();
-  await fetchAppointments();
-  setInterval(fetchAppointments, AUTO_REFRESH_MS);
+  await Promise.all([fetchAppointments(), fetchBlockedTimes()]);
+  setInterval(() => {
+    fetchAppointments();
+    fetchBlockedTimes();
+  }, AUTO_REFRESH_MS);
 })();

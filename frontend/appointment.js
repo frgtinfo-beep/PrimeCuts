@@ -30,6 +30,26 @@ function formatEuro(amount) {
   return amount.toFixed(2).replace(".", ",");
 }
 
+// Matches APPOINTMENT_DURATION_MINUTES in primecuts-backend/src/utils/timeOverlap.js.
+const APPOINTMENT_DURATION_MINUTES = 35;
+
+function timeToMinutes(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// True if a slot starting at `time` would overlap any admin-blocked range for that day.
+function overlapsBlockedRange(time, blockedRanges) {
+  const start = timeToMinutes(time);
+  const end = start + APPOINTMENT_DURATION_MINUTES;
+
+  return blockedRanges.some((range) => {
+    const blockStart = timeToMinutes(range.startTime);
+    const blockEnd = timeToMinutes(range.endTime);
+    return start < blockEnd && end > blockStart;
+  });
+}
+
 // --- 2. UPDATE DOM FUNCTION ---
 function updateSummaryBar() {
   const total = roundToCents(state.basePrice + state.addonPrice);
@@ -303,10 +323,13 @@ async function checkAvailableTimes(selectedDate) {
 
     if (result.success) {
       const bookedTimes = result.data.map((app) => app.time);
+      const blockedRanges = result.blockedRanges || [];
 
       timeBtns.forEach((btn) => {
         const btnTime = btn.getAttribute("data-time");
-        if (bookedTimes.includes(btnTime)) {
+        const isBooked = bookedTimes.includes(btnTime);
+        const isBlocked = overlapsBlockedRange(btnTime, blockedRanges);
+        if (isBooked || isBlocked) {
           btn.disabled = true;
           btn.classList.remove(
             "hover:border-accent/50",

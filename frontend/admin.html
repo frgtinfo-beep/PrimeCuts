@@ -91,18 +91,74 @@
                     class="tab-btn px-5 py-2.5 rounded-xl text-sm font-bold uppercase tracking-wide transition">
                     Voltooid
                 </button>
+                <button type="button" data-tab="availability"
+                    class="tab-btn px-5 py-2.5 rounded-xl text-sm font-bold uppercase tracking-wide transition">
+                    Beschikbaarheid
+                </button>
             </div>
 
-            <div class="relative w-full sm:w-72">
+            <div id="searchWrap" class="relative w-full sm:w-72">
                 <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 text-sm"></i>
                 <input id="searchInput" type="text" placeholder="Zoek op naam..."
                     class="w-full bg-cardbg border border-neutral-800 rounded-xl pl-11 pr-4 py-2.5 text-sm focus:outline-none focus:border-accent transition">
             </div>
         </div>
 
-        <div id="loadingState" class="text-neutral-500 text-sm">Afspraken laden...</div>
-        <div id="emptyState" class="hidden text-neutral-500 text-sm">Geen afspraken gevonden.</div>
-        <div id="appointmentList" class="space-y-4"></div>
+        <!-- Appointments view (Actief / Voltooid) -->
+        <div id="appointmentsView">
+            <div id="loadingState" class="text-neutral-500 text-sm">Afspraken laden...</div>
+            <div id="emptyState" class="hidden text-neutral-500 text-sm">Geen afspraken gevonden.</div>
+            <div id="appointmentList" class="space-y-4"></div>
+        </div>
+
+        <!-- Availability view -->
+        <div id="availabilityView" class="hidden">
+            <form id="blockForm" class="bg-cardbg border border-neutral-800 rounded-2xl p-6 mb-8">
+                <p class="text-neutral-400 text-sm mb-5">
+                    Blokkeer een periode waarin je niet beschikbaar bent — bijvoorbeeld ergens
+                    naartoe om 17:00 tot je weer terug bent. Klanten kunnen dan niet in dit
+                    tijdvak boeken.
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                            Datum
+                        </label>
+                        <input id="blockDate" type="date" required
+                            class="w-full bg-appbg border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accent transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                            Vanaf
+                        </label>
+                        <input id="blockStart" type="time" required
+                            class="w-full bg-appbg border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accent transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                            Tot
+                        </label>
+                        <input id="blockEnd" type="time" required
+                            class="w-full bg-appbg border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accent transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-widest text-neutral-500 mb-2 font-mono">
+                            Reden (optioneel)
+                        </label>
+                        <input id="blockReason" type="text" placeholder="Bijv. afspraak elders"
+                            class="w-full bg-appbg border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accent transition">
+                    </div>
+                </div>
+                <div id="blockError" class="hidden mt-4 rounded-xl border border-red-500 bg-red-900/20 text-red-300 p-3 text-sm"></div>
+                <button id="blockSubmitBtn" type="submit"
+                    class="mt-5 px-6 py-3 rounded-xl bg-gradient-to-b from-accent-light via-accent to-accent-dark font-bold text-sm uppercase tracking-wide transition-all hover:-translate-y-0.5">
+                    Blokkeren
+                </button>
+            </form>
+
+            <div id="blockedEmptyState" class="hidden text-neutral-500 text-sm">Geen geblokkeerde tijden.</div>
+            <div id="blockedTimesList" class="space-y-3"></div>
+        </div>
     </main>
 
     <!-- Cancel confirmation modal -->
