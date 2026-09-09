@@ -23,6 +23,10 @@ const blockSubmitBtn = document.getElementById("blockSubmitBtn");
 const blockedTimesList = document.getElementById("blockedTimesList");
 const blockedEmptyState = document.getElementById("blockedEmptyState");
 
+const refundReminder = document.getElementById("refundReminder");
+const refundReminderList = document.getElementById("refundReminderList");
+const refundReminderCount = document.getElementById("refundReminderCount");
+
 const cancelModal = document.getElementById("cancelModal");
 const cancelModalText = document.getElementById("cancelModalText");
 const cancelModalClose = document.getElementById("cancelModalClose");
@@ -121,6 +125,91 @@ function appointmentCard(appointment) {
         </div>
       </div>
     </div>`;
+}
+
+// Same amount SumUp was asked to refund (see refundableAmount in refundService.js) — the deposit,
+// or the full price for older bookings made before the deposit split existed.
+function refundableAmountFor(appointment) {
+  return typeof appointment.depositAmount === "number" ? appointment.depositAmount : appointment.totalPrice;
+}
+
+const REFUND_CHECK_HIDE_MS = 12 * 60 * 60 * 1000; // how long a checked item stays visible before dropping off
+
+function refundReminderStorageKey(appointmentId) {
+  return `refundCheckedAt:${appointmentId}`;
+}
+
+// null = not checked. Otherwise the timestamp (ms) it was checked at.
+function getRefundCheckedAt(appointmentId) {
+  try {
+    const raw = localStorage.getItem(refundReminderStorageKey(appointmentId));
+    return raw ? Number(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setRefundChecked(appointmentId, checked) {
+  try {
+    if (checked) {
+      localStorage.setItem(refundReminderStorageKey(appointmentId), String(Date.now()));
+    } else {
+      localStorage.removeItem(refundReminderStorageKey(appointmentId));
+    }
+  } catch {
+    // Private browsing / storage disabled — reminder still works, it just won't remember checks.
+  }
+}
+
+// Manual-refund todo list: every cancelled booking where the automatic SumUp refund failed.
+// Ticking it off doesn't resolve anything server-side — it just keeps the row visible (as done)
+// for a 12h grace period, then drops it from the list. If the refund wasn't actually handled,
+// the appointment's refundStatus is still "failed" and there's nothing un-hiding it after that —
+// this is a daily nudge, not a record of completion.
+function renderRefundReminder() {
+  const now = Date.now();
+  const pending = allAppointments
+    .filter((a) => a.refundStatus === "failed")
+    .map((a) => ({ appointment: a, checkedAt: getRefundCheckedAt(a._id) }))
+    .filter(({ checkedAt }) => checkedAt === null || now - checkedAt < REFUND_CHECK_HIDE_MS)
+    .sort((a, b) => new Date(b.appointment.refundedAt || 0) - new Date(a.appointment.refundedAt || 0));
+
+  if (pending.length === 0) {
+    refundReminder.classList.add("hidden");
+    return;
+  }
+
+  refundReminder.classList.remove("hidden");
+  const uncheckedCount = pending.filter(({ checkedAt }) => checkedAt === null).length;
+  refundReminderCount.textContent = uncheckedCount > 0 ? `${uncheckedCount} open` : "Alles gecheckt";
+
+  refundReminderList.innerHTML = pending
+    .map(({ appointment: a, checkedAt }) => {
+      const checked = checkedAt !== null;
+      return `
+        <label class="flex items-start gap-3 text-sm cursor-pointer">
+          <input type="checkbox" data-refund-check-id="${a._id}" ${checked ? "checked" : ""}
+            class="mt-1 accent-accent w-4 h-4 rounded shrink-0">
+          <span class="${checked ? "opacity-40" : ""}">
+            <span class="block font-semibold ${checked ? "line-through" : ""}">${a.customerName}</span>
+            <span class="block text-neutral-500 text-xs">${a.date} — €${formatEuro(refundableAmountFor(a))}</span>
+          </span>
+        </label>`;
+    })
+    .join("");
+
+  refundReminderList.querySelectorAll("[data-refund-check-id]").forEach((input) => {
+    input.addEventListener("change", () => {
+      setRefundChecked(input.getAttribute("data-refund-check-id"), input.checked);
+      renderRefundReminder();
+    });
+  });
+}
+
+// Periodic re-render so a row actually drops off 12h after being checked even if the admin
+// tab is just left open (no appointment data changes to otherwise trigger a re-render).
+function scheduleRefundReminderRefresh() {
+  setInterval(renderRefundReminder, 5 * 60 * 1000);
 }
 
 function updateTabStyles() {
@@ -302,6 +391,7 @@ async function fetchAppointments() {
     loadingState.classList.add("hidden");
     allAppointments = data.data;
     renderCurrentView();
+    renderRefundReminder();
     lastUpdated.textContent = `Laatst bijgewerkt: ${new Date().toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}`;
   } catch (error) {
     loadingState.textContent = error.message;
@@ -386,6 +476,7 @@ logoutBtn.addEventListener("click", async () => {
   }
 
   updateTabStyles();
+  scheduleRefundReminderRefresh();
   await Promise.all([fetchAppointments(), fetchBlockedTimes()]);
   setInterval(() => {
     fetchAppointments();
