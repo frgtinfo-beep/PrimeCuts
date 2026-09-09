@@ -84,7 +84,7 @@ const buildConfirmationEmailHtml = (appointment) => {
               ${buildDetailRow("Tijd", appointment.time)}
               ${buildDetailRow("Totaal", `&euro;${formatEuro(appointment.totalPrice)}`)}
               ${buildDetailRow("Aanbetaling (betaald)", `&euro;${formatEuro(appointment.depositAmount)}`)}
-              ${buildDetailRow("Reserveringskosten (betaald)", `&euro;${formatEuro(appointment.checkoutFee)}`)}
+              ${buildDetailRow("Servicekosten (betaald)", `&euro;${formatEuro(appointment.checkoutFee)}`)}
               ${buildDetailRow("Te betalen in de winkel", `&euro;${formatEuro(remainingBalance)}`, true)}
             </table>
             <p style="margin:24px 0 0;color:#737373;font-size:13px;line-height:1.6;">Tot dan!<br>PrimeCuts Barbershop</p>
@@ -125,7 +125,7 @@ Datum: ${appointment.date}
 Tijd: ${appointment.time}
 Totaal: €${formatEuro(appointment.totalPrice)}
 Aanbetaling (betaald): €${formatEuro(appointment.depositAmount)}
-Reserveringskosten (betaald): €${formatEuro(appointment.checkoutFee)}
+Servicekosten (betaald): €${formatEuro(appointment.checkoutFee)}
 Te betalen in de winkel: €${formatEuro(appointment.totalPrice - appointment.depositAmount)}
 
 Tot dan!
@@ -290,7 +290,7 @@ const createAppointment = async (req, res) => {
       amount: amountCharged,
       currency: "EUR",
       merchant_code: process.env.SUMUP_MERCHANT_CODE,
-      description: `Aanbetaling + reserveringskosten PrimeCuts afspraak ${service} op ${date} om ${time} (aanbetaling €${formatEuro(depositAmount)} + €${formatEuro(checkoutFee)} kosten, rest in winkel)`,
+      description: `Aanbetaling + servicekosten PrimeCuts afspraak ${service} op ${date} om ${time} (aanbetaling €${formatEuro(depositAmount)} + €${formatEuro(checkoutFee)} servicekosten, rest in winkel)`,
       return_url: getPaymentReturnUrl(req),
       redirect_url: getPaymentRedirectUrl(req, checkoutReference),
       hosted_checkout: { enabled: true },

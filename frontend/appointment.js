@@ -48,7 +48,7 @@ function updateSummaryBar() {
 
   document.getElementById("summary-total").textContent = `€${formatEuro(total)}`;
   document.getElementById("summary-deposit-note").textContent =
-    `€${formatEuro(nowTotal)} nu (incl. €${formatEuro(CHECKOUT_FEE)} kosten) · €${formatEuro(remaining)} in de winkel`;
+    `€${formatEuro(nowTotal)} nu (incl. €${formatEuro(CHECKOUT_FEE)} servicekosten) · €${formatEuro(remaining)} in de winkel`;
 }
 
 // --- 3. EVENT LISTENERS: SERVICES ---
