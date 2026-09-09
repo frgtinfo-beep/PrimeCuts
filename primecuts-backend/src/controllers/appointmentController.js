@@ -7,7 +7,7 @@ const { default: SumUp } = require("@sumup/sdk");
 const { scheduleBranchReport } = require("../services/branchReporter");
 const { overlapsBlockedRange } = require("../utils/timeOverlap");
 
-const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecuts.onrender.com").replace(/\/$/, "");
+const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecutsnl.nl").replace(/\/$/, "");
 
 // Real prices, kept here so we don't trust whatever price the browser sends us.
 // Keep this in sync with the data-price values in frontend/appointment.html.
@@ -368,8 +368,22 @@ const resolveCheckoutStatus = async (appointment) => {
   if (checkoutStatus !== "PAID") {
     // PENDING just means SumUp hasn't decided yet (e.g. still on 3DS) — leave the hold in place
     // and only release it once SumUp reports a terminal failure so we don't race a late success.
-    if (checkoutStatus === "FAILED" || checkoutStatus === "EXPIRED") {
-      await Appointment.findByIdAndDelete(appointment._id);
+    // A checkout past its own valid_until is also terminal even if SumUp is slow to relabel it as
+    // EXPIRED — the payer can no longer complete it, so there's nothing left to wait for.
+    const validUntilMs = checkout.valid_until ? new Date(checkout.valid_until).getTime() : null;
+    const pastValidity = validUntilMs !== null && Date.now() > validUntilMs;
+
+    if (checkoutStatus === "FAILED" || checkoutStatus === "EXPIRED" || pastValidity) {
+      // Conditioned on status still not being "confirmed" so we can never delete a booking that
+      // another caller (webhook / frontend return / reconciliation sweep) confirmed a moment ago —
+      // this is exactly the race that let a paid appointment get silently dropped previously.
+      const deleted = await Appointment.findOneAndDelete({
+        _id: appointment._id,
+        status: { $ne: "confirmed" },
+      });
+      if (!deleted) {
+        return { status: "confirmed" };
+      }
       return { status: "released", checkoutStatus };
     }
     return { status: "pending", checkoutStatus };
@@ -388,20 +402,55 @@ const resolveCheckoutStatus = async (appointment) => {
     return { status: "collision" };
   }
 
-  // Clear expiration timer and lock it in as confirmed
-  appointment.status = "confirmed";
-  appointment.expiresAt = undefined;
-  await appointment.save();
+  // Atomically claim the confirmation. The webhook, the frontend's return-from-checkout call, and
+  // the reconciliation sweep below can all end up resolving the same appointment around the same
+  // time — without this, two of them could both see "not confirmed yet" and both send the customer
+  // a duplicate confirmation email and report the same transaction to Branch.nu twice.
+  const claimed = await Appointment.findOneAndUpdate(
+    { _id: appointment._id, status: { $ne: "confirmed" } },
+    { $set: { status: "confirmed" }, $unset: { expiresAt: "" } },
+    { new: true },
+  );
+
+  if (!claimed) {
+    return { status: "confirmed" };
+  }
 
   await Promise.all([
-    sendConfirmationEmail(appointment),
+    sendConfirmationEmail(claimed),
     // Reports the completed transaction to Branch.nu for their revenue-share fee tracking. Never
     // throws — a Branch.nu outage must not affect the customer's already-confirmed payment; it
     // just gets picked up by the retry sweep in server.js instead.
-    scheduleBranchReport(appointment, checkout),
+    scheduleBranchReport(claimed, checkout),
   ]);
 
   return { status: "confirmed" };
+};
+
+// Safety net independent of both the webhook and the customer's browser making it back to the
+// confirmation page — either of those can fail (stale redirect URL, dropped webhook delivery, the
+// customer closing the tab after paying) and, before this existed, that meant a genuinely paid
+// appointment could sit as "pending" until an unconditional timer silently deleted it. This sweep
+// re-checks every still-pending checkout directly against SumUp so a successful payment always
+// gets confirmed even if both of those paths fail. See server.js for the interval it runs on.
+const reconcilePendingCheckouts = async () => {
+  const pending = await Appointment.find({
+    status: "pending",
+    sumupCheckoutId: { $exists: true, $ne: null },
+  });
+
+  for (const appointment of pending) {
+    try {
+      const result = await resolveCheckoutStatus(appointment);
+      if (result.status === "confirmed") {
+        console.log(
+          `Reconciliation sweep confirmed appointment ${appointment._id} — the webhook and/or the customer's return-from-checkout call never resolved it.`,
+        );
+      }
+    } catch (error) {
+      console.error(`Reconciliation sweep failed for appointment ${appointment._id}:`, error.message);
+    }
+  }
 };
 
 const findAppointmentForCheckoutNotification = async (body) => {
@@ -529,4 +578,5 @@ module.exports = {
   getCalendarFeed,
   handlePaymentWebhook,
   cancelAppointment,
+  reconcilePendingCheckouts,
 };

@@ -2,6 +2,7 @@ require('dotenv').config();
 const app = require('./src/app');
 const connectDB = require('./src/config/db'); // Import the database connection
 const { retryPendingBranchReports, retryPendingBranchCancellations } = require('./src/services/branchReporter');
+const { reconcilePendingCheckouts } = require('./src/controllers/appointmentController');
 
 // Connect to MongoDB
 connectDB();
@@ -24,3 +25,14 @@ setInterval(() => {
         console.error('Branch.nu cancellation retry sweep failed:', error.message);
     });
 }, BRANCH_REPORT_SWEEP_INTERVAL_MS);
+
+// Confirms/releases any "pending" appointment directly against SumUp, independent of the webhook
+// and of the customer's browser making it back to the confirmation page — both of those have a
+// single point of failure (a stale redirect URL, a dropped webhook delivery) that previously let a
+// genuinely paid appointment sit unconfirmed. Runs often since this is real customer money.
+const PAYMENT_RECONCILE_INTERVAL_MS = 20 * 1000;
+setInterval(() => {
+    reconcilePendingCheckouts().catch((error) => {
+        console.error('Payment reconciliation sweep failed:', error.message);
+    });
+}, PAYMENT_RECONCILE_INTERVAL_MS);

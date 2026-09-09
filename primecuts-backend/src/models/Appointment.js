@@ -16,7 +16,12 @@ const appointmentSchema = new mongoose.Schema({
   sumupCheckoutId: { type: String },
   sumupCheckoutReference: { type: String },
   status: { type: String, enum: ["pending", "confirmed", "cancelled"], default: "pending" },
-  expiresAt: { type: Date, default: Date.now, expires: 600 },
+  // No longer a Mongo TTL field (see the dropped expiresAt_1 index) — a blind time-based delete
+  // here previously raced a real payment: it could destroy a "pending" appointment that SumUp had
+  // actually just marked PAID, if the webhook/redirect that would've flipped it to "confirmed"
+  // hadn't landed yet. Deletion now only ever happens in resolveCheckoutStatus, gated on a fresh
+  // SumUp status check — this field is kept only as the hold's creation-time reference.
+  expiresAt: { type: Date, default: Date.now },
   cancelledAt: { type: Date },
 
   // Set when an admin cancels a booking — whether the SumUp refund actually went through.
