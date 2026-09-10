@@ -17,6 +17,8 @@ const blockForm = document.getElementById("blockForm");
 const blockDate = document.getElementById("blockDate");
 const blockStart = document.getElementById("blockStart");
 const blockEnd = document.getElementById("blockEnd");
+const blockStartConfirm = document.getElementById("blockStartConfirm");
+const blockEndConfirm = document.getElementById("blockEndConfirm");
 const blockReason = document.getElementById("blockReason");
 const blockError = document.getElementById("blockError");
 const blockSubmitBtn = document.getElementById("blockSubmitBtn");
@@ -333,9 +335,34 @@ async function deleteBlockedTime(blockedTimeId) {
   }
 }
 
+// Native time inputs often show a 12-hour AM/PM picker depending on OS/browser locale, which makes
+// it easy to select the wrong half of the day (e.g. typing "7" defaults to 07:00 AM, not 19:00).
+// Echo back what was actually picked in unambiguous 24h + 12h form so that's obvious before submit.
+function formatTimeConfirm(value) {
+  if (!value) return "";
+  const [h, m] = value.split(":").map(Number);
+  const period = h < 12 ? "AM" : "PM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `= ${value} (${hour12}:${String(m).padStart(2, "0")} ${period})`;
+}
+
+blockStart.addEventListener("input", () => {
+  blockStartConfirm.textContent = formatTimeConfirm(blockStart.value);
+});
+blockEnd.addEventListener("input", () => {
+  blockEndConfirm.textContent = formatTimeConfirm(blockEnd.value);
+});
+
 blockForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   blockError.classList.add("hidden");
+
+  if (blockStart.value >= blockEnd.value) {
+    blockError.textContent = `Eindtijd (${blockEnd.value}) ligt voor of gelijk aan starttijd (${blockStart.value}). Controleer of je AM/PM goed hebt ingesteld.`;
+    blockError.classList.remove("hidden");
+    return;
+  }
+
   blockSubmitBtn.disabled = true;
   blockSubmitBtn.textContent = "Bezig...";
 

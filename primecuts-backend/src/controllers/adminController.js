@@ -119,7 +119,11 @@ const createBlockedTime = async (req, res) => {
       return res.status(400).json({ error: "Ongeldige datum of tijd." });
     }
     if (startTime >= endTime) {
-      return res.status(400).json({ error: "Starttijd moet voor eindtijd liggen." });
+      // The most common cause: the browser's time picker defaulted to AM instead of PM (e.g.
+      // typing "7" for 19:00 saves as 07:00), so call that out instead of just "invalid".
+      return res.status(400).json({
+        error: `Eindtijd (${endTime}) ligt voor of gelijk aan starttijd (${startTime}). Controleer of je AM/PM goed hebt ingesteld.`,
+      });
     }
 
     const blockedTime = await BlockedTime.create({
