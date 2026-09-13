@@ -95,6 +95,10 @@
                     class="tab-btn px-5 py-2.5 rounded-xl text-sm font-bold uppercase tracking-wide transition">
                     Beschikbaarheid
                 </button>
+                <button type="button" data-tab="subscriptions"
+                    class="tab-btn px-5 py-2.5 rounded-xl text-sm font-bold uppercase tracking-wide transition">
+                    Abonnementen
+                </button>
             </div>
 
             <div id="searchWrap" class="relative w-full sm:w-72">
@@ -161,19 +165,45 @@
             <div id="blockedEmptyState" class="hidden text-neutral-500 text-sm">Geen geblokkeerde tijden.</div>
             <div id="blockedTimesList" class="space-y-3"></div>
         </div>
+
+        <!-- Subscriptions view -->
+        <div id="subscriptionsView" class="hidden">
+            <p class="text-neutral-400 text-sm mb-6">
+                Vaste plekken — elke maand automatisch dezelfde dag en tijd. Opzeggen stopt alleen
+                toekomstige maanden; al aangemaakte afspraken moet je apart annuleren.
+            </p>
+            <div id="subscriptionsEmptyState" class="hidden text-neutral-500 text-sm">Geen abonnementen.</div>
+            <div id="subscriptionsList" class="space-y-4"></div>
+        </div>
     </main>
 
-    <!-- Refund reminder -->
-    <aside id="refundReminder" class="hidden fixed top-28 right-6 z-40 w-72 bg-cardbg border border-red-900/60 rounded-2xl p-5 shadow-2xl">
-        <div class="flex items-center justify-between mb-3">
-            <h2 class="font-bebas uppercase text-lg tracking-wide text-red-400">
-                <i class="fa-solid fa-triangle-exclamation mr-2"></i>Refunds
-            </h2>
-            <span id="refundReminderCount" class="text-xs font-mono px-2 py-1 rounded-full bg-red-900/40 text-red-300"></span>
-        </div>
-        <p class="text-neutral-500 text-xs mb-4">Handmatig terugbetalen via SumUp. Verdwijnt 12 uur nadat je 'm afvinkt.</p>
-        <div id="refundReminderList" class="space-y-3"></div>
-    </aside>
+    <!-- Reminder panels (stacked so they never overlap regardless of how many items each has) -->
+    <div class="fixed top-28 right-6 z-40 w-72 space-y-4">
+        <aside id="refundReminder" class="hidden bg-cardbg border border-red-900/60 rounded-2xl p-5 shadow-2xl">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="font-bebas uppercase text-lg tracking-wide text-red-400">
+                    <i class="fa-solid fa-triangle-exclamation mr-2"></i>Refunds
+                </h2>
+                <span id="refundReminderCount" class="text-xs font-mono px-2 py-1 rounded-full bg-red-900/40 text-red-300"></span>
+            </div>
+            <p class="text-neutral-500 text-xs mb-4">Handmatig terugbetalen via SumUp. Verdwijnt 12 uur nadat je 'm afvinkt.</p>
+            <div id="refundReminderList" class="space-y-3"></div>
+        </aside>
+
+        <aside id="paymentIssuesReminder" class="hidden bg-cardbg border border-yellow-700/60 rounded-2xl p-5 shadow-2xl">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="font-bebas uppercase text-lg tracking-wide text-yellow-400">
+                    <i class="fa-solid fa-triangle-exclamation mr-2"></i>Betaald, Geen Plek
+                </h2>
+                <span id="paymentIssuesCount" class="text-xs font-mono px-2 py-1 rounded-full bg-yellow-700/40 text-yellow-300"></span>
+            </div>
+            <p class="text-neutral-500 text-xs mb-4">
+                Betaling kwam binnen, maar het tijdslot was net bezet. Bel de klant om te verzetten
+                of handmatig terug te betalen.
+            </p>
+            <div id="paymentIssuesList" class="space-y-3"></div>
+        </aside>
+    </div>
 
     <!-- Cancel confirmation modal -->
     <div id="cancelModal" class="fixed inset-0 hidden z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">

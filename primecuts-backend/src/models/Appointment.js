@@ -15,12 +15,24 @@ const appointmentSchema = new mongoose.Schema({
   paymentProvider: { type: String, default: "sumup" },
   sumupCheckoutId: { type: String },
   sumupCheckoutReference: { type: String },
-  status: { type: String, enum: ["pending", "confirmed", "cancelled"], default: "pending" },
+  // "expired" = a checkout was actually created (real money could have moved) but SumUp reported
+  // it failed/expired, or it lost a same-slot race to another checkout. This status exists so that
+  // outcome is a *record*, never a deletion — see resolveCheckoutStatus. Once a real checkout
+  // exists for an appointment, that document must never be removed from the database again,
+  // no matter the outcome: a customer's contact info must always be recoverable, even years later,
+  // if a payment ever turns out to have gone through when we thought it hadn't.
+  status: { type: String, enum: ["pending", "confirmed", "cancelled", "expired"], default: "pending" },
+  // Why/when an "expired" appointment was released — for forensics, and so the self-healing sweep
+  // (reconcileExpiredCheckouts in server.js) knows which ones are worth re-checking against SumUp.
+  releasedReason: { type: String, enum: ["failed", "expired", "past_validity", "collision"] },
+  releasedAt: { type: Date },
+  // Set when this appointment is one occurrence of a recurring membership (see models/Subscription).
+  subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: "Subscription" },
   // No longer a Mongo TTL field (see the dropped expiresAt_1 index) — a blind time-based delete
   // here previously raced a real payment: it could destroy a "pending" appointment that SumUp had
   // actually just marked PAID, if the webhook/redirect that would've flipped it to "confirmed"
-  // hadn't landed yet. Deletion now only ever happens in resolveCheckoutStatus, gated on a fresh
-  // SumUp status check — this field is kept only as the hold's creation-time reference.
+  // hadn't landed yet. Nothing deletes on this field's account anymore — kept only as the hold's
+  // creation-time reference.
   expiresAt: { type: Date, default: Date.now },
   cancelledAt: { type: Date },
 

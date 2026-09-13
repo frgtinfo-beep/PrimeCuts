@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const Appointment = require("../models/Appointment");
 const BlockedTime = require("../models/BlockedTime");
+const Subscription = require("../models/Subscription");
 const { sendCancellationEmail } = require("../services/cancellationEmail");
 const { scheduleBranchCancellation } = require("../services/branchReporter");
 const { refundAppointment } = require("../services/refundService");
@@ -163,6 +164,59 @@ const deleteBlockedTime = async (req, res) => {
   }
 };
 
+// Pending ones are shown too (not just active) so the admin can see a signup still waiting on its
+// first payment, not just ones that already went through.
+const listSubscriptions = async (req, res) => {
+  try {
+    const subscriptions = await Subscription.find({ status: { $in: ["pending", "active"] } }).sort({
+      dayOfMonth: 1,
+      time: 1,
+    });
+    res.json({ success: true, data: subscriptions });
+  } catch (error) {
+    console.error("Admin list subscriptions error:", error);
+    res.status(500).json({ error: "Kon abonnementen niet laden." });
+  }
+};
+
+// Stops future renewals only — never retroactively touches appointments already generated for
+// this membership (those get cancelled individually, same as any other appointment, if needed).
+const cancelSubscriptionByAdmin = async (req, res) => {
+  try {
+    const subscription = await Subscription.findById(req.params.subscriptionId);
+    if (!subscription) {
+      return res.status(404).json({ error: "Abonnement niet gevonden." });
+    }
+
+    subscription.status = "cancelled";
+    subscription.cancelledAt = new Date();
+    await subscription.save();
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Admin cancel subscription error:", error);
+    res.status(500).json({ error: "Opzeggen mislukt." });
+  }
+};
+
+// "expired" appointments where the customer's payment actually went through (per resolveCheckoutStatus
+// in appointmentController.js) but the slot had already been taken by someone else in the meantime —
+// real money with nowhere to go, needs a human to refund or reschedule. This is exactly the class of
+// problem that used to disappear without a trace (see Sept 7) — it can't anymore, but it still needs
+// a person to see it, not just sit logged on Render.
+const listPaymentIssues = async (req, res) => {
+  try {
+    const issues = await Appointment.find({
+      status: "expired",
+      releasedReason: "collision",
+    }).sort({ releasedAt: -1 });
+    res.json({ success: true, data: issues });
+  } catch (error) {
+    console.error("Admin list payment issues error:", error);
+    res.status(500).json({ error: "Kon betalingsproblemen niet laden." });
+  }
+};
+
 module.exports = {
   login,
   logout,
@@ -172,4 +226,7 @@ module.exports = {
   listBlockedTimes,
   createBlockedTime,
   deleteBlockedTime,
+  listSubscriptions,
+  cancelSubscriptionByAdmin,
+  listPaymentIssues,
 };

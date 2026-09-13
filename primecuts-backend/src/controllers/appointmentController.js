@@ -2,6 +2,7 @@ const { isValidObjectId } = require("mongoose");
 const nodemailer = require("nodemailer");
 const Appointment = require("../models/Appointment");
 const BlockedTime = require("../models/BlockedTime");
+const Subscription = require("../models/Subscription");
 const ical = require("ical-generator").default;
 const { default: SumUp } = require("@sumup/sdk");
 const { scheduleBranchReport } = require("../services/branchReporter");
@@ -34,6 +35,14 @@ const ADDON_PRICES = {
   "Baard Trimmen": 5,
 };
 
+// Recurring membership pricing — flat per-cut price, no addons, no deposit split (the full amount
+// is charged upfront each time, unlike the à la carte booking flow). Weekly is priced higher per
+// cut since it reserves 4 spots a month instead of 1.
+const SUBSCRIPTION_PRICES = {
+  monthly: 32.5,
+  weekly: 35.0,
+};
+
 const sumupClient = new SumUp({
   apiKey: process.env.SUMUP_API_KEY || "",
 });
@@ -57,12 +66,26 @@ const buildDetailRow = (label, value, isLast) => `
 
 // Inline-styled table layout (not the site's Tailwind classes) since email clients don't load
 // external stylesheets — but same palette/logo as the website so it reads as the same brand.
-const buildConfirmationEmailHtml = (appointment) => {
-  const addonsRow =
-    appointment.addons && appointment.addons.length > 0
-      ? buildDetailRow("Extra's", appointment.addons.join(", "))
-      : "";
-  const remainingBalance = appointment.totalPrice - appointment.depositAmount;
+const buildConfirmationEmailHtml = (appointment, recurrenceLabel) => {
+  const isSubscription = Boolean(appointment.subscriptionId);
+  // totalPrice includes checkoutFee (already paid online) — exclude it here so this is only the
+  // service-price portion still owed in store, not a double-count of the fee.
+  const remainingBalance = appointment.totalPrice - appointment.depositAmount - (appointment.checkoutFee || 0);
+
+  // A subscription's first month has no separate fee and nothing left to pay in store — skip those
+  // rows entirely rather than show a confusing "€0,00". Built as a list so whichever row ends up
+  // last still gets the bottom-border-removing isLast treatment.
+  const rows = [
+    ["Behandeling", appointment.service],
+    ...(appointment.addons && appointment.addons.length > 0 ? [["Extra's", appointment.addons.join(", ")]] : []),
+    ["Datum", appointment.date],
+    ["Tijd", appointment.time],
+    ["Totaal", `&euro;${formatEuro(appointment.totalPrice)}`],
+    ["Aanbetaling (betaald)", `&euro;${formatEuro(appointment.depositAmount)}`],
+    ...(appointment.checkoutFee ? [["Servicekosten (betaald)", `&euro;${formatEuro(appointment.checkoutFee)}`]] : []),
+    ...(remainingBalance ? [["Te betalen in de winkel", `&euro;${formatEuro(remainingBalance)}`]] : []),
+  ];
+  const detailRows = rows.map(([label, value], i) => buildDetailRow(label, value, i === rows.length - 1)).join("");
 
   return `<!DOCTYPE html>
 <html>
@@ -77,17 +100,14 @@ const buildConfirmationEmailHtml = (appointment) => {
         <tr>
           <td style="background:#111111;border-radius:16px;border:1px solid #262626;padding:32px 24px;">
             <p style="margin:0 0 8px;color:#e5342a;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">Betaling ontvangen</p>
-            <h1 style="margin:0 0 20px;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;">Afspraak Bevestigd</h1>
-            <p style="margin:0 0 24px;color:#a3a3a3;font-size:15px;line-height:1.6;">Hoi ${appointment.customerName}, je afspraak bij PrimeCuts staat vast.</p>
+            <h1 style="margin:0 0 20px;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;">${isSubscription ? "Abonnement Bevestigd" : "Afspraak Bevestigd"}</h1>
+            <p style="margin:0 0 24px;color:#a3a3a3;font-size:15px;line-height:1.6;">${
+              isSubscription
+                ? `Hoi ${appointment.customerName}, je vaste plek bij PrimeCuts staat vast — ${recurrenceLabel} om ${appointment.time}.`
+                : `Hoi ${appointment.customerName}, je afspraak bij PrimeCuts staat vast.`
+            }</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0A;border-radius:12px;border:1px solid #262626;">
-              ${buildDetailRow("Behandeling", appointment.service)}
-              ${addonsRow}
-              ${buildDetailRow("Datum", appointment.date)}
-              ${buildDetailRow("Tijd", appointment.time)}
-              ${buildDetailRow("Totaal", `&euro;${formatEuro(appointment.totalPrice)}`)}
-              ${buildDetailRow("Aanbetaling (betaald)", `&euro;${formatEuro(appointment.depositAmount)}`)}
-              ${buildDetailRow("Servicekosten (betaald)", `&euro;${formatEuro(appointment.checkoutFee)}`)}
-              ${buildDetailRow("Te betalen in de winkel", `&euro;${formatEuro(remainingBalance)}`, true)}
+              ${detailRows}
             </table>
             <p style="margin:24px 0 0;color:#737373;font-size:13px;line-height:1.6;">Tot dan!<br>PrimeCuts Barbershop</p>
           </td>
@@ -108,31 +128,42 @@ const sendConfirmationEmail = async (appointment) => {
     return;
   }
 
+  const isSubscription = Boolean(appointment.subscriptionId);
+  // Only the plaintext recurrence line needs this — pull it fresh rather than trusting anything on
+  // the appointment itself, since frequency lives on the Subscription record, not the appointment.
+  let recurrenceLabel = "elke maand op deze dag en tijd";
+  if (isSubscription) {
+    const subscription = await Subscription.findById(appointment.subscriptionId).select("frequency");
+    if (subscription?.frequency === "weekly") recurrenceLabel = "elke week op deze dag";
+  }
   const addonsText =
     appointment.addons && appointment.addons.length > 0
       ? `\nExtra's: ${appointment.addons.join(", ")}`
       : "";
+  // totalPrice includes checkoutFee (already paid online) — exclude it here so this is only the
+  // service-price portion still owed in store, not a double-count of the fee.
+  const remainingBalance = appointment.totalPrice - appointment.depositAmount - (appointment.checkoutFee || 0);
+  const feeLine = appointment.checkoutFee ? `\nServicekosten (betaald): €${formatEuro(appointment.checkoutFee)}` : "";
+  const remainingLine = remainingBalance ? `\nTe betalen in de winkel: €${formatEuro(remainingBalance)}` : "";
 
   try {
     await mailTransporter.sendMail({
       from: `"PrimeCuts" <${process.env.GMAIL_USER}>`,
       to: appointment.customerEmail,
-      subject: "Je afspraak bij PrimeCuts is bevestigd",
+      subject: isSubscription ? "Je abonnement bij PrimeCuts is bevestigd" : "Je afspraak bij PrimeCuts is bevestigd",
       text: `Hoi ${appointment.customerName},
 
-Je afspraak is bevestigd:
+${isSubscription ? `Je vaste plek is bevestigd — ${recurrenceLabel}:` : "Je afspraak is bevestigd:"}
 
 Behandeling: ${appointment.service}${addonsText}
 Datum: ${appointment.date}
 Tijd: ${appointment.time}
 Totaal: €${formatEuro(appointment.totalPrice)}
-Aanbetaling (betaald): €${formatEuro(appointment.depositAmount)}
-Servicekosten (betaald): €${formatEuro(appointment.checkoutFee)}
-Te betalen in de winkel: €${formatEuro(appointment.totalPrice - appointment.depositAmount)}
+Aanbetaling (betaald): €${formatEuro(appointment.depositAmount)}${feeLine}${remainingLine}
 
 Tot dan!
 PrimeCuts`,
-      html: buildConfirmationEmailHtml(appointment),
+      html: buildConfirmationEmailHtml(appointment, recurrenceLabel),
     });
   } catch (error) {
     console.error("Failed to send confirmation email:", error.message);
@@ -152,14 +183,14 @@ const getBaseUrl = (req) => {
   return `${protocol}://${req.get("host")}`;
 };
 
-const getPaymentRedirectUrl = (req, appointmentId) => {
+const getPaymentRedirectUrl = (req, appointmentId, page = "appointment.html") => {
   // The customer needs to land back on the frontend site, not this backend service — they're
   // deployed as separate Render services on different domains. Falls back to this backend's own
   // origin only if FRONTEND_BASE_URL isn't set, so local single-server testing still works.
   const frontendBaseUrl = process.env.FRONTEND_BASE_URL
     ? process.env.FRONTEND_BASE_URL.replace(/\/$/, "")
     : getBaseUrl(req);
-  return `${frontendBaseUrl}/appointment.html?payment=success&appointmentId=${appointmentId}`;
+  return `${frontendBaseUrl}/${page}?payment=success&appointmentId=${appointmentId}`;
 };
 
 const getPaymentReturnUrl = (req) => {
@@ -197,7 +228,7 @@ const getAppointmentById = async (req, res) => {
     const appointment = await Appointment.findById(
       req.params.appointmentId,
     ).select(
-      "date time service addons totalPrice depositAmount status sumupCheckoutId sumupCheckoutReference branchReportStatus branchReportAttempts branchReportLastError",
+      "date time service addons totalPrice depositAmount checkoutFee status sumupCheckoutId sumupCheckoutReference branchReportStatus branchReportAttempts branchReportLastError",
     );
 
     if (!appointment) {
@@ -257,11 +288,14 @@ const createAppointment = async (req, res) => {
       addonsTotal += addonPrice;
     }
 
-    const totalPrice = servicePrice + addonsTotal;
-    // Customer only pays this much online now; the rest is settled in person at the shop.
-    const depositAmount = roundToCents(totalPrice * DEPOSIT_RATIO);
-    // Charged on top of the deposit, never folded into the service's own price or the in-store balance.
+    const servicePriceSubtotal = servicePrice + addonsTotal;
+    // Charged on top of the deposit, never folded into the in-store balance — but "totalPrice" is
+    // the FULL amount the customer pays across both (service + fee), so it's included here.
     const checkoutFee = CHECKOUT_FEE;
+    const totalPrice = roundToCents(servicePriceSubtotal + checkoutFee);
+    // Customer only pays this much online now; the rest is settled in person at the shop. Based on
+    // the service price alone — the fee isn't split, it's paid in full online regardless.
+    const depositAmount = roundToCents(servicePriceSubtotal * DEPOSIT_RATIO);
     const amountCharged = roundToCents(depositAmount + checkoutFee);
 
     // Hold the slot while payment is pending so another customer cannot reserve it.
@@ -340,6 +374,122 @@ const createAppointment = async (req, res) => {
   }
 };
 
+// Step 1 for a recurring membership: same validation/holding logic as createAppointment, but a
+// flat price with no addons or deposit split. Creates a Subscription (the recurring template) and
+// its first Appointment (an ordinary appointment, just tagged with subscriptionId) together — the
+// Appointment is what actually goes through the existing pending -> confirmed payment flow below;
+// resolveCheckoutStatus flips the linked Subscription to "active" once that succeeds.
+const createSubscription = async (req, res) => {
+  let createdAppointment = null;
+  let createdSubscription = null;
+
+  try {
+    const { customerName, customerEmail, customerPhone, date, time, frequency } = req.body;
+
+    if (typeof date !== "string" || typeof time !== "string" || !/^\d{2}:\d{2}$/.test(time)) {
+      return res.status(400).json({ error: "Invalid date or time." });
+    }
+
+    const plan = frequency === "weekly" ? "weekly" : "monthly";
+    const price = SUBSCRIPTION_PRICES[plan];
+
+    const blockedRanges = await BlockedTime.find({ date }).select("startTime endTime -_id");
+    if (overlapsBlockedRange(time, blockedRanges)) {
+      return res.status(400).json({ error: "This time slot is not available." });
+    }
+
+    const existing = await Appointment.findOne({
+      date,
+      time,
+      status: { $in: ["pending", "confirmed"] },
+    });
+    if (existing) {
+      return res.status(400).json({ error: "This time slot is already taken." });
+    }
+
+    const dayOfMonth = new Date(`${date}T00:00:00`).getDate();
+
+    createdSubscription = await Subscription.create({
+      customerName,
+      customerEmail,
+      customerPhone,
+      frequency: plan,
+      dayOfMonth,
+      time,
+      price,
+      status: "pending",
+    });
+
+    createdAppointment = await Appointment.create({
+      customerName,
+      customerEmail,
+      customerPhone,
+      service: "Abonnement",
+      addons: [],
+      date,
+      time,
+      totalPrice: price,
+      depositAmount: price,
+      checkoutFee: 0,
+      status: "pending",
+      paymentProvider: "sumup",
+      subscriptionId: createdSubscription._id,
+    });
+
+    createdSubscription.firstAppointmentId = createdAppointment._id;
+    await createdSubscription.save();
+
+    if (!process.env.SUMUP_API_KEY || !process.env.SUMUP_MERCHANT_CODE) {
+      await Promise.all([
+        Appointment.findByIdAndDelete(createdAppointment._id),
+        Subscription.findByIdAndDelete(createdSubscription._id),
+      ]);
+      return res.status(500).json({ error: "Payment configuration is missing." });
+    }
+
+    const checkoutReference = createdAppointment._id.toString();
+    const planLabel = plan === "weekly" ? "elke week (4x per maand)" : "elke maand op de " + dayOfMonth + "e";
+    const checkout = await sumupClient.checkouts.create({
+      checkout_reference: checkoutReference,
+      amount: price,
+      currency: "EUR",
+      merchant_code: process.env.SUMUP_MERCHANT_CODE,
+      description: `PrimeCuts abonnement — vaste plek ${planLabel} om ${time}`,
+      return_url: getPaymentReturnUrl(req),
+      redirect_url: getPaymentRedirectUrl(req, checkoutReference, "subscription.html"),
+      hosted_checkout: { enabled: true },
+      valid_until: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    });
+
+    await Appointment.findByIdAndUpdate(createdAppointment._id, {
+      sumupCheckoutId: checkout.id || null,
+      sumupCheckoutReference: checkout.checkout_reference || checkoutReference,
+    });
+
+    const paymentUrl = checkout.hosted_checkout_url || checkout.redirect_url;
+    if (!paymentUrl) {
+      throw new Error("SumUp did not return a hosted checkout URL.");
+    }
+
+    res.status(201).json({
+      success: true,
+      appointmentId: createdAppointment._id,
+      checkoutId: checkout.id,
+      paymentUrl,
+      message: "Payment checkout created.",
+    });
+  } catch (error) {
+    console.error("Subscription booking error:", error);
+    if (createdAppointment) {
+      await Appointment.findByIdAndDelete(createdAppointment._id).catch(() => {});
+    }
+    if (createdSubscription) {
+      await Subscription.findByIdAndDelete(createdSubscription._id).catch(() => {});
+    }
+    res.status(500).json({ error: "Server error while creating subscription" });
+  }
+};
+
 // SumUp doesn't sign its webhook payload, so the body can't be trusted for the actual payment
 // decision — it's only used to look up which appointment this is about. The real status always
 // comes from a fresh GET against SumUp's API using the checkout id WE stored when we created the
@@ -374,14 +524,24 @@ const resolveCheckoutStatus = async (appointment) => {
     const pastValidity = validUntilMs !== null && Date.now() > validUntilMs;
 
     if (checkoutStatus === "FAILED" || checkoutStatus === "EXPIRED" || pastValidity) {
-      // Conditioned on status still not being "confirmed" so we can never delete a booking that
+      // Conditioned on status still not being "confirmed" so we can never release a booking that
       // another caller (webhook / frontend return / reconciliation sweep) confirmed a moment ago —
       // this is exactly the race that let a paid appointment get silently dropped previously.
-      const deleted = await Appointment.findOneAndDelete({
-        _id: appointment._id,
-        status: { $ne: "confirmed" },
-      });
-      if (!deleted) {
+      // Marks it "expired" rather than deleting it — this is what makes that failure mode
+      // structurally impossible now: the customer's contact info and checkout id survive even if
+      // SumUp turns out to have actually settled the payment after this point (the self-healing
+      // sweep in server.js re-checks recently-expired ones for exactly that).
+      const released = await Appointment.findOneAndUpdate(
+        { _id: appointment._id, status: { $ne: "confirmed" } },
+        {
+          $set: {
+            status: "expired",
+            releasedReason: checkoutStatus === "FAILED" ? "failed" : pastValidity ? "past_validity" : "expired",
+            releasedAt: new Date(),
+          },
+        },
+      );
+      if (!released) {
         return { status: "confirmed" };
       }
       return { status: "released", checkoutStatus };
@@ -398,7 +558,13 @@ const resolveCheckoutStatus = async (appointment) => {
   });
 
   if (collision) {
-    await Appointment.findByIdAndDelete(appointment._id);
+    // This appointment genuinely got paid — it just lost a same-slot race to another booking that
+    // confirmed first. That's real money with nowhere to go, so this must never be a silent
+    // delete: keep the record (marked "expired"/"collision") so an admin can see it and refund or
+    // reschedule the customer, instead of the payment just vanishing from every record we have.
+    await Appointment.findByIdAndUpdate(appointment._id, {
+      $set: { status: "expired", releasedReason: "collision", releasedAt: new Date() },
+    });
     return { status: "collision" };
   }
 
@@ -422,6 +588,11 @@ const resolveCheckoutStatus = async (appointment) => {
     // throws — a Branch.nu outage must not affect the customer's already-confirmed payment; it
     // just gets picked up by the retry sweep in server.js instead.
     scheduleBranchReport(claimed, checkout),
+    // First payment on a membership confirmed — the renewal sweep (subscriptionRenewal.js) only
+    // ever touches "active" subscriptions, so this is what turns recurring generation on.
+    claimed.subscriptionId
+      ? Subscription.findByIdAndUpdate(claimed.subscriptionId, { status: "active" })
+      : Promise.resolve(),
   ]);
 
   return { status: "confirmed" };
@@ -449,6 +620,53 @@ const reconcilePendingCheckouts = async () => {
       }
     } catch (error) {
       console.error(`Reconciliation sweep failed for appointment ${appointment._id}:`, error.message);
+    }
+  }
+};
+
+// Self-healing net for the exact failure that lost two real payments before this existed: a
+// checkout that SumUp settles as PAID *after* we'd already given up and marked it "expired" (a
+// slow 3DS confirmation, a delayed bank callback, or — historically — a broken webhook URL). Only
+// looks at recently-released ones so this doesn't grow into an unbounded SumUp-polling job as the
+// database ages; anything older than that has long since been handled one way or another.
+// Re-checking simply calls resolveCheckoutStatus again, which now either:
+//   - finds it's still genuinely unpaid (no-op, re-stamps "expired")
+//   - finds it's PAID and the slot is free -> auto-confirms it, exactly as if the webhook had
+//     landed on time
+//   - finds it's PAID but the slot was since taken by someone else -> stays "expired" with
+//     releasedReason "collision", which is real money with a real conflict that needs a human —
+//     logged loudly here since there's nothing further this sweep can automate.
+const EXPIRED_RECHECK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const reconcileExpiredCheckouts = async () => {
+  const cutoff = new Date(Date.now() - EXPIRED_RECHECK_WINDOW_MS);
+  const candidates = await Appointment.find({
+    status: "expired",
+    sumupCheckoutId: { $exists: true, $ne: null },
+    releasedAt: { $gte: cutoff },
+  });
+
+  for (const appointment of candidates) {
+    try {
+      const result = await resolveCheckoutStatus(appointment);
+      if (result.status === "confirmed") {
+        console.log(
+          `Self-healing sweep confirmed appointment ${appointment._id} — SumUp settled it as PAID after it had already been marked expired.`,
+        );
+      } else if (result.status === "collision") {
+        console.error(
+          "MANUAL FOLLOW-UP REQUIRED:",
+          JSON.stringify({
+            stage: "expired_checkout_recheck",
+            reason: "paid_but_slot_taken",
+            appointmentId: appointment._id.toString(),
+            customerName: appointment.customerName,
+            date: appointment.date,
+            time: appointment.time,
+          }),
+        );
+      }
+    } catch (error) {
+      console.error(`Expired-checkout recheck failed for appointment ${appointment._id}:`, error.message);
     }
   }
 };
@@ -559,7 +777,7 @@ const getCalendarFeed = async (req, res) => {
         start: startTime,
         end: endTime,
         summary: `${app.service} - ${app.customerName}`,
-        description: `Customer: ${app.customerName}\nPhone: ${app.customerPhone}\nEmail: ${app.customerEmail}\nAdd-ons: ${addOnsText}\nTotal Price: €${app.totalPrice.toFixed(2)}\nDeposit paid online: €${app.depositAmount.toFixed(2)}\nDue in store: €${(app.totalPrice - app.depositAmount).toFixed(2)}`,
+        description: `Customer: ${app.customerName}\nPhone: ${app.customerPhone}\nEmail: ${app.customerEmail}\nAdd-ons: ${addOnsText}\nTotal Price: €${app.totalPrice.toFixed(2)}\nDeposit paid online: €${app.depositAmount.toFixed(2)}\nDue in store: €${(app.totalPrice - app.depositAmount - (app.checkoutFee || 0)).toFixed(2)}`,
         location: "Primecuts Barbershop",
       });
     });
@@ -573,10 +791,13 @@ const getCalendarFeed = async (req, res) => {
 
 module.exports = {
   createAppointment,
+  createSubscription,
   getAppointments,
   getAppointmentById,
   getCalendarFeed,
   handlePaymentWebhook,
   cancelAppointment,
   reconcilePendingCheckouts,
+  reconcileExpiredCheckouts,
+  sendConfirmationEmail,
 };

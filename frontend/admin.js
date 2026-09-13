@@ -12,6 +12,9 @@ const searchWrap = document.getElementById("searchWrap");
 const tabButtons = document.querySelectorAll(".tab-btn");
 const appointmentsView = document.getElementById("appointmentsView");
 const availabilityView = document.getElementById("availabilityView");
+const subscriptionsView = document.getElementById("subscriptionsView");
+const subscriptionsList = document.getElementById("subscriptionsList");
+const subscriptionsEmptyState = document.getElementById("subscriptionsEmptyState");
 
 const blockForm = document.getElementById("blockForm");
 const blockDate = document.getElementById("blockDate");
@@ -28,6 +31,10 @@ const blockedEmptyState = document.getElementById("blockedEmptyState");
 const refundReminder = document.getElementById("refundReminder");
 const refundReminderList = document.getElementById("refundReminderList");
 const refundReminderCount = document.getElementById("refundReminderCount");
+
+const paymentIssuesReminder = document.getElementById("paymentIssuesReminder");
+const paymentIssuesList = document.getElementById("paymentIssuesList");
+const paymentIssuesCount = document.getElementById("paymentIssuesCount");
 
 const cancelModal = document.getElementById("cancelModal");
 const cancelModalText = document.getElementById("cancelModalText");
@@ -51,7 +58,9 @@ function showToast(message, variant) {
 
 let allAppointments = [];
 let allBlockedTimes = [];
-let activeTab = "active"; // "active" | "past" | "availability"
+let allSubscriptions = [];
+let allPaymentIssues = [];
+let activeTab = "active"; // "active" | "past" | "availability" | "subscriptions"
 let pendingCancelId = null;
 
 function formatEuro(amount) {
@@ -91,7 +100,11 @@ function appointmentCard(appointment) {
   // Bookings made before the deposit split existed have no depositAmount on record.
   const hasDeposit = typeof appointment.depositAmount === "number";
   const depositText = hasDeposit ? `€${formatEuro(appointment.depositAmount)}` : "—";
-  const remainingText = hasDeposit ? `€${formatEuro(appointment.totalPrice - appointment.depositAmount)}` : "—";
+  // totalPrice includes checkoutFee (already paid online) — exclude it so this is only the
+  // service-price portion still owed in store, not a double-count of the fee.
+  const remainingText = hasDeposit
+    ? `€${formatEuro(appointment.totalPrice - appointment.depositAmount - (appointment.checkoutFee || 0))}`
+    : "—";
   const cancelledStyle = appointment.status === "cancelled" ? "opacity-50" : "";
 
   return `
@@ -102,7 +115,7 @@ function appointmentCard(appointment) {
             <i class="fa-solid fa-calendar text-accent"></i>
             <span class="font-bebas text-xl tracking-wide">${appointment.date} — ${appointment.time}</span>
           </div>
-          <p class="text-neutral-400 text-sm">${appointment.service}${addonsText}</p>
+          <p class="text-neutral-400 text-sm">${appointment.service}${addonsText}${appointment.subscriptionId ? ' <i class="fa-solid fa-repeat text-accent" title="Abonnement"></i>' : ""}</p>
         </div>
         ${statusBadge(appointment)}
       </div>
@@ -214,6 +227,52 @@ function scheduleRefundReminderRefresh() {
   setInterval(renderRefundReminder, 5 * 60 * 1000);
 }
 
+// Unlike the refund reminder, there's no "check it off" dismissal here — a payment-issue row is
+// real money sitting against a slot that's no longer held, and it should stay visible until the
+// underlying appointment is actually dealt with (refunded or rebooked), not just acknowledged.
+function paymentIssueCard(appointment) {
+  const paidAmount = (appointment.depositAmount || 0) + (appointment.checkoutFee || 0);
+  const releasedDate = appointment.releasedAt
+    ? new Date(appointment.releasedAt).toLocaleString("nl-NL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : "";
+  return `
+    <div class="text-sm border-b border-yellow-900/30 pb-3 last:border-0 last:pb-0">
+      <span class="block font-semibold">${appointment.customerName}</span>
+      <span class="block text-neutral-500 text-xs">${appointment.date} — ${appointment.time} &middot; ${appointment.service}</span>
+      <span class="block text-neutral-500 text-xs">${appointment.customerPhone} &middot; ${appointment.customerEmail}</span>
+      <span class="block text-yellow-400 text-xs mt-1">Betaald: €${formatEuro(paidAmount)}${releasedDate ? ` &middot; ${releasedDate}` : ""}</span>
+    </div>`;
+}
+
+function renderPaymentIssues() {
+  if (allPaymentIssues.length === 0) {
+    paymentIssuesReminder.classList.add("hidden");
+    return;
+  }
+
+  paymentIssuesReminder.classList.remove("hidden");
+  paymentIssuesCount.textContent = `${allPaymentIssues.length} open`;
+  paymentIssuesList.innerHTML = allPaymentIssues.map(paymentIssueCard).join("");
+}
+
+async function fetchPaymentIssues() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/admin/payment-issues`);
+    if (response.status === 401) {
+      window.location.href = "admin-login.html";
+      return;
+    }
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Kon betalingsproblemen niet laden.");
+    }
+    allPaymentIssues = data.data;
+    renderPaymentIssues();
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
 function updateTabStyles() {
   tabButtons.forEach((btn) => {
     const isActiveTab = btn.getAttribute("data-tab") === activeTab;
@@ -245,12 +304,18 @@ function renderCurrentView() {
   updateTabStyles();
 
   const isAvailability = activeTab === "availability";
-  appointmentsView.classList.toggle("hidden", isAvailability);
+  const isSubscriptions = activeTab === "subscriptions";
+  appointmentsView.classList.toggle("hidden", isAvailability || isSubscriptions);
   availabilityView.classList.toggle("hidden", !isAvailability);
-  searchWrap.classList.toggle("hidden", isAvailability);
+  subscriptionsView.classList.toggle("hidden", !isSubscriptions);
+  searchWrap.classList.toggle("hidden", isAvailability || isSubscriptions);
 
   if (isAvailability) {
     renderBlockedTimes();
+    return;
+  }
+  if (isSubscriptions) {
+    renderSubscriptions();
     return;
   }
 
@@ -330,6 +395,103 @@ async function deleteBlockedTime(blockedTimeId) {
       throw new Error(data.error || "Verwijderen mislukt.");
     }
     await fetchBlockedTimes();
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+function subscriptionCard(subscription) {
+  const statusText =
+    subscription.status === "pending"
+      ? `<span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-yellow-500/15 text-yellow-400 text-xs font-semibold uppercase tracking-wide">Wacht op betaling</span>`
+      : `<span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/15 text-green-400 text-xs font-semibold uppercase tracking-wide">Actief</span>`;
+  const cancelBtn = `<button type="button" data-cancel-subscription-id="${subscription._id}"
+      class="cancel-subscription-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-900 text-red-400 hover:bg-red-900/20 transition text-xs font-semibold uppercase tracking-wide">
+    <i class="fa-solid fa-xmark"></i> Opzeggen
+  </button>`;
+
+  const scheduleText =
+    subscription.frequency === "weekly"
+      ? `Elke week — ${subscription.time}`
+      : `Elke maand op de ${subscription.dayOfMonth}e — ${subscription.time}`;
+  const planText = subscription.frequency === "weekly" ? "4x per maand" : "1x per maand";
+
+  return `
+    <div class="bg-cardbg border border-neutral-800 rounded-2xl p-6">
+      <div class="flex flex-wrap justify-between items-start gap-4">
+        <div>
+          <div class="flex items-center gap-3 mb-1">
+            <i class="fa-solid fa-repeat text-accent"></i>
+            <span class="font-bebas text-xl tracking-wide">${scheduleText}</span>
+          </div>
+          <p class="text-neutral-400 text-sm">€${formatEuro(subscription.price)} / knipbeurt &middot; ${planText}</p>
+        </div>
+        <div class="flex items-center gap-3">
+          ${statusText}
+          ${cancelBtn}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-neutral-800">
+        <div>
+          <p class="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 font-mono">Klant</p>
+          <p class="text-sm font-semibold">${subscription.customerName}</p>
+        </div>
+        <div>
+          <p class="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 font-mono">Contact</p>
+          <p class="text-sm">${subscription.customerPhone}</p>
+          <p class="text-sm text-neutral-400">${subscription.customerEmail}</p>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderSubscriptions() {
+  if (allSubscriptions.length === 0) {
+    subscriptionsList.innerHTML = "";
+    subscriptionsEmptyState.classList.remove("hidden");
+    return;
+  }
+
+  subscriptionsEmptyState.classList.add("hidden");
+  subscriptionsList.innerHTML = allSubscriptions.map(subscriptionCard).join("");
+
+  document.querySelectorAll(".cancel-subscription-btn").forEach((btn) => {
+    btn.addEventListener("click", () => cancelSubscription(btn.getAttribute("data-cancel-subscription-id")));
+  });
+}
+
+async function fetchSubscriptions() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/admin/subscriptions`);
+    if (response.status === 401) {
+      window.location.href = "admin-login.html";
+      return;
+    }
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Kon abonnementen niet laden.");
+    }
+    allSubscriptions = data.data;
+    if (activeTab === "subscriptions") renderSubscriptions();
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+async function cancelSubscription(subscriptionId) {
+  if (!confirm("Dit abonnement opzeggen? Toekomstige maanden worden niet meer aangemaakt.")) return;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/admin/subscriptions/${subscriptionId}/cancel`, {
+      method: "POST",
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Opzeggen mislukt.");
+    }
+    await fetchSubscriptions();
+    showToast("Abonnement opgezegd.", "success");
   } catch (error) {
     showToast(error.message, "error");
   }
@@ -487,6 +649,8 @@ searchInput.addEventListener("input", renderCurrentView);
 refreshBtn.addEventListener("click", () => {
   fetchAppointments();
   fetchBlockedTimes();
+  fetchSubscriptions();
+  fetchPaymentIssues();
 });
 
 logoutBtn.addEventListener("click", async () => {
@@ -504,9 +668,11 @@ logoutBtn.addEventListener("click", async () => {
 
   updateTabStyles();
   scheduleRefundReminderRefresh();
-  await Promise.all([fetchAppointments(), fetchBlockedTimes()]);
+  await Promise.all([fetchAppointments(), fetchBlockedTimes(), fetchSubscriptions(), fetchPaymentIssues()]);
   setInterval(() => {
     fetchAppointments();
     fetchBlockedTimes();
+    fetchSubscriptions();
+    fetchPaymentIssues();
   }, AUTO_REFRESH_MS);
 })();

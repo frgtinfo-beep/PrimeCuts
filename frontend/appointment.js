@@ -52,10 +52,13 @@ function overlapsBlockedRange(time, blockedRanges) {
 
 // --- 2. UPDATE DOM FUNCTION ---
 function updateSummaryBar() {
-  const total = roundToCents(state.basePrice + state.addonPrice);
-  const deposit = roundToCents(total * DEPOSIT_RATIO);
-  const remaining = roundToCents(total - deposit);
+  // "Totaal" is the full amount including servicekosten — the deposit/remaining split below is
+  // still based on the service price alone (the fee is charged once, online, never owed in store).
+  const servicePrice = roundToCents(state.basePrice + state.addonPrice);
+  const deposit = roundToCents(servicePrice * DEPOSIT_RATIO);
+  const remaining = roundToCents(servicePrice - deposit);
   const nowTotal = roundToCents(deposit + CHECKOUT_FEE);
+  const fullTotal = roundToCents(servicePrice + CHECKOUT_FEE);
 
   document.getElementById("summary-service").textContent = state.service;
   document.getElementById("summary-date").textContent = state.date || "...";
@@ -66,7 +69,7 @@ function updateSummaryBar() {
     document.getElementById("summary-time").textContent = "Kies tijd";
   }
 
-  document.getElementById("summary-total").textContent = `€${formatEuro(total)}`;
+  document.getElementById("summary-total").textContent = `€${formatEuro(fullTotal)}`;
   document.getElementById("summary-deposit-note").textContent =
     `€${formatEuro(nowTotal)} nu (incl. €${formatEuro(CHECKOUT_FEE)} servicekosten) · €${formatEuro(remaining)} in de winkel`;
 }
@@ -417,7 +420,7 @@ async function showPaymentReturnState() {
     if (data.data.status === "confirmed") {
       errorMessage.classList.add("hidden");
       successContent.classList.remove("hidden");
-      successText.textContent = `Betaling ontvangen. Je afspraak staat vast op ${data.data.date} om ${data.data.time}. Nog te betalen in de winkel: €${formatEuro(data.data.totalPrice - data.data.depositAmount)}.`;
+      successText.textContent = `Betaling ontvangen. Je afspraak staat vast op ${data.data.date} om ${data.data.time}. Nog te betalen in de winkel: €${formatEuro(data.data.totalPrice - data.data.depositAmount - (data.data.checkoutFee || 0))}.`;
       return;
     }
 
@@ -434,7 +437,7 @@ async function showPaymentReturnState() {
     if (cancelData.status === "confirmed") {
       errorMessage.classList.add("hidden");
       successContent.classList.remove("hidden");
-      successText.textContent = `Betaling ontvangen. Je afspraak staat vast op ${data.data.date} om ${data.data.time}. Nog te betalen in de winkel: €${formatEuro(data.data.totalPrice - data.data.depositAmount)}.`;
+      successText.textContent = `Betaling ontvangen. Je afspraak staat vast op ${data.data.date} om ${data.data.time}. Nog te betalen in de winkel: €${formatEuro(data.data.totalPrice - data.data.depositAmount - (data.data.checkoutFee || 0))}.`;
     } else if (cancelData.status === "released" || cancelData.status === "collision") {
       successContent.classList.add("hidden");
       errorMessage.classList.remove("hidden");
@@ -455,13 +458,16 @@ async function showPaymentReturnState() {
 
 openCheckoutBtn.addEventListener("click", () => {
   if (!state.time) return;
-  const total = roundToCents(state.basePrice + state.addonPrice);
-  const deposit = roundToCents(total * DEPOSIT_RATIO);
-  const remaining = roundToCents(total - deposit);
+  // "Totaal" is the full amount including servicekosten — the deposit/remaining split is still
+  // based on the service price alone (the fee is charged once, online, never owed in store).
+  const servicePrice = roundToCents(state.basePrice + state.addonPrice);
+  const deposit = roundToCents(servicePrice * DEPOSIT_RATIO);
+  const remaining = roundToCents(servicePrice - deposit);
   const nowTotal = roundToCents(deposit + CHECKOUT_FEE);
+  const fullTotal = roundToCents(servicePrice + CHECKOUT_FEE);
 
   document.getElementById("modalService").textContent = state.service;
-  document.getElementById("modalPrice").textContent = `€${formatEuro(total)}`;
+  document.getElementById("modalPrice").textContent = `€${formatEuro(fullTotal)}`;
   document.getElementById("modalDeposit").textContent = `€${formatEuro(deposit)}`;
   document.getElementById("modalFee").textContent = `€${formatEuro(CHECKOUT_FEE)}`;
   document.getElementById("modalNowTotal").textContent = `€${formatEuro(nowTotal)}`;
@@ -505,7 +511,9 @@ bookingForm.addEventListener("submit", async (e) => {
   );
   const verifiedTotal = roundToCents(verifiedBasePrice + verifiedAddonPrice);
   // modalPrice is rendered via formatEuro (comma decimal, e.g. "€22,50") — swap back to a dot
-  // before parsing, since parseFloat stops at the first non-numeric character otherwise.
+  // before parsing, since parseFloat stops at the first non-numeric character otherwise. It shows
+  // the FULL total (service price + servicekosten), so compare against that, not the service
+  // price alone.
   const modalDisplayedTotal = parseFloat(
     document.getElementById("modalPrice").textContent.replace("€", "").replace(",", "."),
   );
@@ -513,7 +521,7 @@ bookingForm.addEventListener("submit", async (e) => {
   if (
     !Number.isFinite(verifiedTotal) ||
     verifiedTotal !== roundToCents(state.basePrice + state.addonPrice) ||
-    verifiedTotal !== modalDisplayedTotal
+    roundToCents(verifiedTotal + CHECKOUT_FEE) !== modalDisplayedTotal
   ) {
     errorMessage.textContent =
       "Prijs kon niet worden geverifieerd. Vernieuw de pagina en probeer opnieuw.";
