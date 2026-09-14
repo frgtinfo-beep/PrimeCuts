@@ -346,6 +346,10 @@ function attachTimeListeners() {
 
       const checkoutBtn = document.getElementById("openCheckoutBtn");
       checkoutBtn.disabled = false;
+      // On phone/tablet the summary+Doorgaan footer stays out of the way until there's an actual
+      // selection to confirm — on desktop it's always visible (see the lg:block override in CSS).
+      document.getElementById("summaryFooter").classList.remove("hidden");
+      document.body.classList.add("has-summary-footer");
     });
   });
 }
@@ -427,6 +431,8 @@ async function checkAvailableTimes(selectedDate) {
             updateSummaryBar();
             const checkoutBtn = document.getElementById("openCheckoutBtn");
             checkoutBtn.disabled = true;
+            document.getElementById("summaryFooter").classList.add("hidden");
+            document.body.classList.remove("has-summary-footer");
           }
         }
       });
