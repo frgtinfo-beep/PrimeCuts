@@ -74,6 +74,67 @@ function updateSummaryBar() {
     `€${formatEuro(nowTotal)} nu (incl. €${formatEuro(CHECKOUT_FEE)} servicekosten) · €${formatEuro(remaining)} in de winkel`;
 }
 
+// --- 2b. MOBILE BOOKING WIZARD ---
+// Below lg (1024px) the service/date/time sections stack into one long scroll (the layout used at
+// every width above that). This shows one step at a time instead and auto-advances on selection —
+// the .step-hidden class it toggles only has an effect under 1024px (see <style>), so the same
+// code path is harmless no-op bookkeeping at desktop widths.
+const STEP_ORDER = ["service", "date", "time"];
+let currentWizardStep = "service";
+
+const wizardStepSections = {
+  service: document.getElementById("stepService"),
+  date: document.getElementById("stepDateWrap"),
+  time: document.getElementById("stepTimeWrap"),
+};
+
+const wizardStepLabel = document.getElementById("wizardStepLabel");
+const wizardBackBtn = document.getElementById("wizardBackBtn");
+const wizardDots = document.querySelectorAll("#wizardProgress [data-dot]");
+
+const WIZARD_STEP_LABELS = {
+  service: "Stap 1 van 3 — Dienst",
+  date: "Stap 2 van 3 — Datum",
+  time: "Stap 3 van 3 — Tijd",
+};
+
+function isWizardActive() {
+  return window.matchMedia("(max-width: 1023px)").matches;
+}
+
+function goToWizardStep(step, { scroll = true } = {}) {
+  currentWizardStep = step;
+
+  STEP_ORDER.forEach((key) => {
+    wizardStepSections[key].classList.toggle("step-hidden", key !== step);
+  });
+
+  wizardStepLabel.textContent = WIZARD_STEP_LABELS[step];
+  wizardBackBtn.classList.toggle("hidden", step === "service");
+
+  const currentIndex = STEP_ORDER.indexOf(step);
+  wizardDots.forEach((dot) => {
+    const dotIndex = Number(dot.getAttribute("data-dot")) - 1;
+    dot.classList.toggle("bg-accent", dotIndex <= currentIndex);
+    dot.classList.toggle("bg-neutral-800", dotIndex > currentIndex);
+  });
+
+  // Only scroll on the actual mobile/tablet wizard — on desktop all steps are visible together,
+  // so jumping the scroll position there would just be jarring. Skipped on the initial page-load
+  // call too, so the hero isn't yanked out from under the visitor before they've scrolled at all.
+  if (scroll && isWizardActive()) {
+    wizardStepSections[step].scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+wizardBackBtn.addEventListener("click", () => {
+  const idx = STEP_ORDER.indexOf(currentWizardStep);
+  if (idx > 0) goToWizardStep(STEP_ORDER[idx - 1]);
+});
+
+document.getElementById("nextToStep2Btn").addEventListener("click", () => goToWizardStep("date"));
+document.getElementById("nextToStep3Btn").addEventListener("click", () => goToWizardStep("time"));
+
 // --- 3. EVENT LISTENERS: SERVICES ---
 const serviceCards = document.querySelectorAll(".service-card");
 serviceCards.forEach((card) => {
@@ -95,6 +156,9 @@ serviceCards.forEach((card) => {
     state.service = card.getAttribute("data-service");
     state.basePrice = parseFloat(card.getAttribute("data-price"));
     updateSummaryBar();
+
+    // Brief pause so the checkmark/selection feedback is visible before the wizard advances.
+    setTimeout(() => goToWizardStep("date"), 300);
   });
 });
 
@@ -230,6 +294,8 @@ function attachDateListeners() {
       state.date = btn.getAttribute("data-date");
       updateSummaryBar();
       checkAvailableTimes(state.date);
+
+      setTimeout(() => goToWizardStep("time"), 300);
     });
   });
 }
@@ -615,4 +681,5 @@ window.addEventListener("DOMContentLoaded", () => {
   updateSummaryBar();
   checkAvailableTimes(state.date);
   showPaymentReturnState();
+  goToWizardStep("service", { scroll: false });
 });

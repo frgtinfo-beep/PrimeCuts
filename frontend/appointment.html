@@ -89,6 +89,16 @@
             transition: .2s;
         }
 
+        /* ============ Mobile booking wizard ============ */
+        /* Below lg (1024px) the booking sections stack into one long page — on that range only,
+           show a single step at a time instead. Above lg the existing side-by-side layout wins,
+           since this rule simply doesn't apply there. */
+        @media (max-width: 1023px) {
+            .step-hidden {
+                display: none !important;
+            }
+        }
+
         /* ============ Brand system (shared with homepage) ============ */
         .chrome-text {
             color: #fff;
@@ -144,7 +154,7 @@
 <!-- ==========================================
      HERO
 =========================================== -->
-<header class="relative h-[42vh] w-full overflow-hidden border-b border-neutral-900">
+<header class="relative h-[26vh] md:h-[34vh] lg:h-[42vh] w-full overflow-hidden border-b border-neutral-900">
 
     <!-- Background Image -->
     <div class="absolute inset-0 bg-cover bg-center opacity-40" style="background-image: url('./image/appointment_image.jpg');"></div>
@@ -217,9 +227,26 @@
 <main class="max-w-7xl mx-auto px-6 py-14 grid lg:grid-cols-12 gap-10">
 
     <!-- ======================================
+         MOBILE WIZARD HEADER (hidden on lg+, where all steps show at once)
+    ======================================= -->
+    <div class="lg:hidden col-span-1">
+        <div class="flex items-center justify-between mb-3">
+            <button id="wizardBackBtn" type="button" class="hidden items-center gap-2 text-sm text-neutral-400 hover:text-accent transition">
+                <i class="fa-solid fa-arrow-left"></i> Terug
+            </button>
+            <span id="wizardStepLabel" class="ml-auto font-mono text-xs uppercase tracking-widest text-neutral-500"></span>
+        </div>
+        <div id="wizardProgress" class="flex gap-2 mb-8">
+            <span class="h-1 flex-1 rounded-full bg-accent transition-colors" data-dot="1"></span>
+            <span class="h-1 flex-1 rounded-full bg-neutral-800 transition-colors" data-dot="2"></span>
+            <span class="h-1 flex-1 rounded-full bg-neutral-800 transition-colors" data-dot="3"></span>
+        </div>
+    </div>
+
+    <!-- ======================================
          LEFT COLUMN
     ======================================= -->
-    <section class="lg:col-span-4">
+    <section id="stepService" class="lg:col-span-4">
         <div class="bg-panelbg border border-neutral-800 rounded-2xl p-6">
 
             <h2 class="font-bebas uppercase tracking-wide text-xl mb-6 flex items-center gap-3">
@@ -366,6 +393,10 @@
                 </label>
             </div>
 
+            <button id="nextToStep2Btn" type="button" class="lg:hidden mt-8 w-full btn-corner py-4 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white font-bold uppercase tracking-wide text-sm transition-all duration-300 hover:-translate-y-0.5">
+                Volgende: Datum <i class="fa-solid fa-arrow-right ml-2"></i>
+            </button>
+
         </div>
     </section>
 
@@ -373,7 +404,7 @@
          RIGHT COLUMN
     ======================================= -->
     <section class="lg:col-span-8">
-        <h2 class="font-bebas uppercase tracking-wide text-xl mb-6 flex items-center gap-3">
+        <h2 class="hidden lg:flex font-bebas uppercase tracking-wide text-xl mb-6 items-center gap-3">
             <span class="w-1 h-5 bg-accent inline-block"></span>
             Kies Datum &amp; Tijd
         </h2>
@@ -381,24 +412,30 @@
         <div class="grid md:grid-cols-[360px_1fr] gap-8">
 
             <!-- Calendar -->
-            <div class="bg-panelbg border border-neutral-800 rounded-2xl p-6">
-                <h3 id="calendarMonth" class="text-center font-semibold mb-6 font-mono text-sm tracking-wide text-neutral-300 uppercase"></h3>
+            <div id="stepDateWrap" class="step-hidden">
+                <div class="bg-panelbg border border-neutral-800 rounded-2xl p-6">
+                    <h3 id="calendarMonth" class="text-center font-semibold mb-6 font-mono text-sm tracking-wide text-neutral-300 uppercase"></h3>
 
-                <div class="grid grid-cols-7 text-center text-xs uppercase tracking-wide text-neutral-500 mb-4 font-mono">
-                    <div>Ma</div>
-                    <div>Di</div>
-                    <div>Wo</div>
-                    <div>Do</div>
-                    <div>Vr</div>
-                    <div>Za</div>
-                    <div>Zo</div>
+                    <div class="grid grid-cols-7 text-center text-xs uppercase tracking-wide text-neutral-500 mb-4 font-mono">
+                        <div>Ma</div>
+                        <div>Di</div>
+                        <div>Wo</div>
+                        <div>Do</div>
+                        <div>Vr</div>
+                        <div>Za</div>
+                        <div>Zo</div>
+                    </div>
+
+                    <div id="dateContainer" class="grid grid-cols-7 gap-3 text-center"></div>
                 </div>
 
-                <div id="dateContainer" class="grid grid-cols-7 gap-3 text-center"></div>
+                <button id="nextToStep3Btn" type="button" class="lg:hidden mt-6 w-full btn-corner py-4 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white font-bold uppercase tracking-wide text-sm transition-all duration-300 hover:-translate-y-0.5">
+                    Volgende: Tijd <i class="fa-solid fa-arrow-right ml-2"></i>
+                </button>
             </div>
 
             <!-- Time Slots -->
-            <div>
+            <div id="stepTimeWrap" class="step-hidden">
                 <div id="timeContainer" class="grid grid-cols-3 md:grid-cols-4 gap-3"></div>
             </div>
 
