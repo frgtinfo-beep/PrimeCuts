@@ -25,6 +25,13 @@ const subscriptionSchema = new mongoose.Schema(
     status: { type: String, enum: ["pending", "active", "cancelled"], default: "pending" },
     firstAppointmentId: { type: mongoose.Schema.Types.ObjectId, ref: "Appointment" },
     cancelledAt: { type: Date },
+    // Set by the renewal sweep (subscriptionRenewal.js) when it can't stamp out the next occurrence
+    // because the slot got taken or blocked in the meantime — surfaced in the admin portal instead
+    // of only being a server log line, since otherwise this failure was invisible without tailing
+    // Render's logs. Cleared automatically as soon as a later sweep succeeds for this membership.
+    renewalIssue: { type: String, enum: ["slot_taken", "slot_blocked"] },
+    renewalIssueDate: { type: String }, // the occurrence date (YYYY-MM-DD) that couldn't be generated
+    renewalIssueAt: { type: Date },
   },
   { timestamps: true },
 );

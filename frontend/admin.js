@@ -36,6 +36,10 @@ const paymentIssuesReminder = document.getElementById("paymentIssuesReminder");
 const paymentIssuesList = document.getElementById("paymentIssuesList");
 const paymentIssuesCount = document.getElementById("paymentIssuesCount");
 
+const renewalIssuesReminder = document.getElementById("renewalIssuesReminder");
+const renewalIssuesList = document.getElementById("renewalIssuesList");
+const renewalIssuesCount = document.getElementById("renewalIssuesCount");
+
 const cancelModal = document.getElementById("cancelModal");
 const cancelModalText = document.getElementById("cancelModalText");
 const cancelModalClose = document.getElementById("cancelModalClose");
@@ -65,6 +69,20 @@ let pendingCancelId = null;
 
 function formatEuro(amount) {
   return Number(amount).toFixed(2).replace(".", ",");
+}
+
+// Every appointment/subscription field rendered below (customerName, customerEmail, customerPhone)
+// is filled in by anyone who books through the public site — it must never go into innerHTML
+// unescaped, or a booking like `customerName: "<img src=x onerror=...>"` runs arbitrary JS in this
+// authenticated admin session (session-cookie theft, calling any /api/admin/* endpoint as the admin).
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[ch]);
 }
 
 // Appointment's own local date/time string, parsed as a local Date for comparison against "now".
@@ -123,12 +141,12 @@ function appointmentCard(appointment) {
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-neutral-800">
         <div>
           <p class="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 font-mono">Klant</p>
-          <p class="text-sm font-semibold">${appointment.customerName}</p>
+          <p class="text-sm font-semibold">${escapeHtml(appointment.customerName)}</p>
         </div>
         <div>
           <p class="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 font-mono">Contact</p>
-          <p class="text-sm">${appointment.customerPhone}</p>
-          <p class="text-sm text-neutral-400">${appointment.customerEmail}</p>
+          <p class="text-sm">${escapeHtml(appointment.customerPhone)}</p>
+          <p class="text-sm text-neutral-400">${escapeHtml(appointment.customerEmail)}</p>
         </div>
         <div>
           <p class="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 font-mono">Totaal</p>
@@ -206,7 +224,7 @@ function renderRefundReminder() {
           <input type="checkbox" data-refund-check-id="${a._id}" ${checked ? "checked" : ""}
             class="mt-1 accent-accent w-4 h-4 rounded shrink-0">
           <span class="${checked ? "opacity-40" : ""}">
-            <span class="block font-semibold ${checked ? "line-through" : ""}">${a.customerName}</span>
+            <span class="block font-semibold ${checked ? "line-through" : ""}">${escapeHtml(a.customerName)}</span>
             <span class="block text-neutral-500 text-xs">${a.date} — €${formatEuro(refundableAmountFor(a))}</span>
           </span>
         </label>`;
@@ -237,9 +255,9 @@ function paymentIssueCard(appointment) {
     : "";
   return `
     <div class="text-sm border-b border-yellow-900/30 pb-3 last:border-0 last:pb-0">
-      <span class="block font-semibold">${appointment.customerName}</span>
-      <span class="block text-neutral-500 text-xs">${appointment.date} — ${appointment.time} &middot; ${appointment.service}</span>
-      <span class="block text-neutral-500 text-xs">${appointment.customerPhone} &middot; ${appointment.customerEmail}</span>
+      <span class="block font-semibold">${escapeHtml(appointment.customerName)}</span>
+      <span class="block text-neutral-500 text-xs">${appointment.date} — ${appointment.time} &middot; ${escapeHtml(appointment.service)}</span>
+      <span class="block text-neutral-500 text-xs">${escapeHtml(appointment.customerPhone)} &middot; ${escapeHtml(appointment.customerEmail)}</span>
       <span class="block text-yellow-400 text-xs mt-1">Betaald: €${formatEuro(paidAmount)}${releasedDate ? ` &middot; ${releasedDate}` : ""}</span>
     </div>`;
 }
@@ -253,6 +271,36 @@ function renderPaymentIssues() {
   paymentIssuesReminder.classList.remove("hidden");
   paymentIssuesCount.textContent = `${allPaymentIssues.length} open`;
   paymentIssuesList.innerHTML = allPaymentIssues.map(paymentIssueCard).join("");
+}
+
+// Sourced from allSubscriptions (already fetched by fetchSubscriptions) rather than a separate
+// endpoint — the renewal sweep persists renewalIssue directly onto the Subscription document, and
+// listSubscriptions already returns full documents, so this is just filtering data already in hand.
+function renewalIssueCard(subscription) {
+  const reasonText = subscription.renewalIssue === "slot_taken" ? "tijdslot is al bezet" : "tijdslot is geblokkeerd";
+  const issueDate = subscription.renewalIssueAt
+    ? new Date(subscription.renewalIssueAt).toLocaleString("nl-NL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : "";
+  return `
+    <div class="text-sm border-b border-orange-900/30 pb-3 last:border-0 last:pb-0">
+      <span class="block font-semibold">${escapeHtml(subscription.customerName)}</span>
+      <span class="block text-neutral-500 text-xs">${subscription.renewalIssueDate} — ${subscription.time} &middot; ${reasonText}</span>
+      <span class="block text-neutral-500 text-xs">${escapeHtml(subscription.customerPhone)} &middot; ${escapeHtml(subscription.customerEmail)}</span>
+      ${issueDate ? `<span class="block text-orange-400 text-xs mt-1">Sinds ${issueDate}</span>` : ""}
+    </div>`;
+}
+
+function renderRenewalIssues() {
+  const issues = allSubscriptions.filter((s) => s.renewalIssue);
+
+  if (issues.length === 0) {
+    renewalIssuesReminder.classList.add("hidden");
+    return;
+  }
+
+  renewalIssuesReminder.classList.remove("hidden");
+  renewalIssuesCount.textContent = `${issues.length} open`;
+  renewalIssuesList.innerHTML = issues.map(renewalIssueCard).join("");
 }
 
 async function fetchPaymentIssues() {
@@ -336,7 +384,7 @@ function renderCurrentView() {
 }
 
 function blockedTimeCard(blockedTime) {
-  const reasonText = blockedTime.reason ? ` — ${blockedTime.reason}` : "";
+  const reasonText = blockedTime.reason ? ` — ${escapeHtml(blockedTime.reason)}` : "";
   return `
     <div class="bg-cardbg border border-neutral-800 rounded-2xl p-5 flex flex-wrap justify-between items-center gap-4">
       <div>
@@ -435,12 +483,12 @@ function subscriptionCard(subscription) {
       <div class="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-neutral-800">
         <div>
           <p class="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 font-mono">Klant</p>
-          <p class="text-sm font-semibold">${subscription.customerName}</p>
+          <p class="text-sm font-semibold">${escapeHtml(subscription.customerName)}</p>
         </div>
         <div>
           <p class="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 font-mono">Contact</p>
-          <p class="text-sm">${subscription.customerPhone}</p>
-          <p class="text-sm text-neutral-400">${subscription.customerEmail}</p>
+          <p class="text-sm">${escapeHtml(subscription.customerPhone)}</p>
+          <p class="text-sm text-neutral-400">${escapeHtml(subscription.customerEmail)}</p>
         </div>
       </div>
     </div>`;
@@ -474,6 +522,7 @@ async function fetchSubscriptions() {
     }
     allSubscriptions = data.data;
     if (activeTab === "subscriptions") renderSubscriptions();
+    renderRenewalIssues();
   } catch (error) {
     showToast(error.message, "error");
   }

@@ -322,6 +322,7 @@ async function showPaymentReturnState() {
   const urlParams = new URLSearchParams(window.location.search);
   const paymentState = urlParams.get("payment");
   const appointmentId = urlParams.get("appointmentId");
+  const plan = urlParams.get("plan");
 
   if (!appointmentId || paymentState !== "success") return;
 
@@ -330,8 +331,13 @@ async function showPaymentReturnState() {
     const data = await response.json();
     if (!response.ok || !data.success) throw new Error(data.error || "Abonnement niet gevonden");
 
+    // This is a fresh page load after the SumUp redirect, so `state.plan` is back to its default —
+    // the actual plan the customer picked travels back via this URL param instead (see
+    // getPaymentRedirectUrl in appointmentController.js), not via in-memory state that just reset.
+    const recurrenceText = plan === "weekly" ? "elke week op deze dag" : "elke maand op deze dag";
+
     if (data.data.status === "confirmed") {
-      successText.textContent = `Je vaste plek staat vast — elke maand op deze dag om ${data.data.time}.`;
+      successText.textContent = `Je vaste plek staat vast — ${recurrenceText} om ${data.data.time}.`;
     } else {
       // Not confirmed yet — ask the backend to verify with SumUp directly and release the hold
       // immediately if payment actually failed, instead of waiting for the reconciliation sweep.
@@ -343,7 +349,7 @@ async function showPaymentReturnState() {
       const cancelData = await cancelResponse.json();
 
       if (cancelData.status === "confirmed") {
-        successText.textContent = `Je vaste plek staat vast — elke maand op deze dag om ${data.data.time}.`;
+        successText.textContent = `Je vaste plek staat vast — ${recurrenceText} om ${data.data.time}.`;
       } else if (cancelData.status === "released" || cancelData.status === "collision") {
         successText.textContent = "Betaling mislukt of geannuleerd. Je abonnement is niet bevestigd.";
       } else {

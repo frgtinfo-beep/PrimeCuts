@@ -70,17 +70,24 @@ async function generateUpcomingSubscriptionAppointments() {
       });
 
       if (overlapsBlockedRange(subscription.time, blockedRanges) || slotTaken) {
+        const reason = slotTaken ? "slot_taken" : "slot_blocked";
         console.error(
           "MANUAL FOLLOW-UP REQUIRED:",
           JSON.stringify({
             stage: "subscription_renewal",
-            reason: slotTaken ? "slot_taken" : "slot_blocked",
+            reason,
             subscriptionId: subscription._id.toString(),
             customerName: subscription.customerName,
             date: nextDate,
             time: subscription.time,
           }),
         );
+        // Persisted (not just logged) so this shows up in the admin portal — every sweep re-attempts
+        // the same date until it succeeds, so this naturally clears itself once the conflict is
+        // resolved (the blocked time removed, or the conflicting appointment cancelled).
+        await Subscription.findByIdAndUpdate(subscription._id, {
+          $set: { renewalIssue: reason, renewalIssueDate: nextDate, renewalIssueAt: new Date() },
+        });
         continue;
       }
 
@@ -99,6 +106,14 @@ async function generateUpcomingSubscriptionAppointments() {
         paymentProvider: "subscription",
         subscriptionId: subscription._id,
       });
+
+      // Clears any stale flag from a previous cycle that failed to renew — this cycle just
+      // succeeded, so whatever conflict caused that has since been resolved.
+      if (subscription.renewalIssue) {
+        await Subscription.findByIdAndUpdate(subscription._id, {
+          $unset: { renewalIssue: "", renewalIssueDate: "", renewalIssueAt: "" },
+        });
+      }
 
       await sendConfirmationEmail(newAppointment);
 

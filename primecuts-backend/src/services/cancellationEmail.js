@@ -14,6 +14,10 @@ const mailTransporter =
     : null;
 
 const formatEuro = (amount) => amount.toFixed(2).replace(".", ",");
+// customerName is filled in by whoever booked — escape before interpolating into the HTML email
+// so a name like "<img src=x onerror=...>" can't run in whatever renders it.
+const escapeHtml = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 // Reflects what actually happened with the refund (see refundService.js), not just an assumption
 // that it will happen — refundStatus/refundAmount are set on the appointment before this is called.
 const depositLine = (appointment, euroSymbol) => {
@@ -40,7 +44,7 @@ const buildCancellationEmailHtml = (appointment) => `<!DOCTYPE html>
           <td style="background:#111111;border-radius:16px;border:1px solid #262626;padding:32px 24px;">
             <p style="margin:0 0 8px;color:#e5342a;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">Afspraak geannuleerd</p>
             <h1 style="margin:0 0 20px;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;">Afspraak Geannuleerd</h1>
-            <p style="margin:0 0 24px;color:#a3a3a3;font-size:15px;line-height:1.6;">Hoi ${appointment.customerName}, je afspraak bij PrimeCuts op ${appointment.date} om ${appointment.time} is helaas geannuleerd.</p>
+            <p style="margin:0 0 24px;color:#a3a3a3;font-size:15px;line-height:1.6;">Hoi ${escapeHtml(appointment.customerName)}, je afspraak bij PrimeCuts op ${appointment.date} om ${appointment.time} is helaas geannuleerd.</p>
             <p style="margin:0 0 24px;color:#a3a3a3;font-size:15px;line-height:1.6;">${depositLine(appointment, "&euro;")}Neem gerust contact met ons op als je vragen hebt of een nieuwe afspraak wilt maken.</p>
             <p style="margin:24px 0 0;color:#737373;font-size:13px;line-height:1.6;">Met vriendelijke groet,<br>PrimeCuts Barbershop</p>
           </td>

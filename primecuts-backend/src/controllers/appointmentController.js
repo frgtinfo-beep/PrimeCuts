@@ -27,6 +27,11 @@ const DEPOSIT_RATIO = 0.5;
 // minus deposit only).
 const CHECKOUT_FEE = 2.36;
 const roundToCents = (amount) => Math.round(amount * 100) / 100;
+// customerName is filled in by whoever books — the HTML confirmation email interpolates it
+// directly, so escape it before that so a name like "<img src=x onerror=...>" can't run in
+// whatever renders the email (most mail clients ignore it, but never rely on that).
+const escapeHtml = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 // Dutch currency style (comma decimal, always 2 places) — halving an odd euro amount (e.g. €25)
 // produces a .5 deposit that plain interpolation would print as ".5" instead of ",50".
 const formatEuro = (amount) => amount.toFixed(2).replace(".", ",");
@@ -103,8 +108,8 @@ const buildConfirmationEmailHtml = (appointment, recurrenceLabel) => {
             <h1 style="margin:0 0 20px;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;">${isSubscription ? "Abonnement Bevestigd" : "Afspraak Bevestigd"}</h1>
             <p style="margin:0 0 24px;color:#a3a3a3;font-size:15px;line-height:1.6;">${
               isSubscription
-                ? `Hoi ${appointment.customerName}, je vaste plek bij PrimeCuts staat vast — ${recurrenceLabel} om ${appointment.time}.`
-                : `Hoi ${appointment.customerName}, je afspraak bij PrimeCuts staat vast.`
+                ? `Hoi ${escapeHtml(appointment.customerName)}, je vaste plek bij PrimeCuts staat vast — ${recurrenceLabel} om ${appointment.time}.`
+                : `Hoi ${escapeHtml(appointment.customerName)}, je afspraak bij PrimeCuts staat vast.`
             }</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0A;border-radius:12px;border:1px solid #262626;">
               ${detailRows}
@@ -183,14 +188,17 @@ const getBaseUrl = (req) => {
   return `${protocol}://${req.get("host")}`;
 };
 
-const getPaymentRedirectUrl = (req, appointmentId, page = "appointment.html") => {
+const getPaymentRedirectUrl = (req, appointmentId, page = "appointment.html", extraParams = {}) => {
   // The customer needs to land back on the frontend site, not this backend service — they're
   // deployed as separate Render services on different domains. Falls back to this backend's own
   // origin only if FRONTEND_BASE_URL isn't set, so local single-server testing still works.
   const frontendBaseUrl = process.env.FRONTEND_BASE_URL
     ? process.env.FRONTEND_BASE_URL.replace(/\/$/, "")
     : getBaseUrl(req);
-  return `${frontendBaseUrl}/${page}?payment=success&appointmentId=${appointmentId}`;
+  const extra = Object.entries(extraParams)
+    .map(([key, value]) => `&${key}=${encodeURIComponent(value)}`)
+    .join("");
+  return `${frontendBaseUrl}/${page}?payment=success&appointmentId=${appointmentId}${extra}`;
 };
 
 const getPaymentReturnUrl = (req) => {
@@ -243,6 +251,27 @@ const getAppointmentById = async (req, res) => {
   }
 };
 
+// The booking form itself constrains these (type="email", required, etc.), but that only holds for
+// someone actually using the UI — calling this endpoint directly with garbage/missing values used to
+// sail through and only fail at Mongoose's schema validation, surfacing as a generic 500 instead of
+// a clean 400. Deliberately lenient (this only guards against nonsense input, not real-world name/
+// phone formats), so it never rejects a genuine customer.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^[0-9+\-\s()]{6,20}$/;
+
+const validateCustomerFields = ({ customerName, customerEmail, customerPhone }) => {
+  if (typeof customerName !== "string" || !customerName.trim() || customerName.trim().length > 100) {
+    return "Vul een geldige naam in.";
+  }
+  if (typeof customerEmail !== "string" || customerEmail.length > 200 || !EMAIL_REGEX.test(customerEmail.trim())) {
+    return "Vul een geldig e-mailadres in.";
+  }
+  if (typeof customerPhone !== "string" || !PHONE_REGEX.test(customerPhone.trim())) {
+    return "Vul een geldig telefoonnummer in.";
+  }
+  return null;
+};
+
 // Step 1: create the booking as 'pending' until payment confirms it
 const createAppointment = async (req, res) => {
   let createdAppointment = null;
@@ -257,6 +286,11 @@ const createAppointment = async (req, res) => {
       date,
       time,
     } = req.body;
+
+    const customerFieldError = validateCustomerFields(req.body);
+    if (customerFieldError) {
+      return res.status(400).json({ error: customerFieldError });
+    }
 
     // date/time feed straight into a Mongo query below — reject anything that isn't a plain string
     // so a crafted object (e.g. { "$ne": null }) can't be read as a query operator. Also enforces
@@ -386,6 +420,11 @@ const createSubscription = async (req, res) => {
   try {
     const { customerName, customerEmail, customerPhone, date, time, frequency } = req.body;
 
+    const customerFieldError = validateCustomerFields(req.body);
+    if (customerFieldError) {
+      return res.status(400).json({ error: customerFieldError });
+    }
+
     if (typeof date !== "string" || typeof time !== "string" || !/^\d{2}:\d{2}$/.test(time)) {
       return res.status(400).json({ error: "Invalid date or time." });
     }
@@ -456,7 +495,7 @@ const createSubscription = async (req, res) => {
       merchant_code: process.env.SUMUP_MERCHANT_CODE,
       description: `PrimeCuts abonnement — vaste plek ${planLabel} om ${time}`,
       return_url: getPaymentReturnUrl(req),
-      redirect_url: getPaymentRedirectUrl(req, checkoutReference, "subscription.html"),
+      redirect_url: getPaymentRedirectUrl(req, checkoutReference, "subscription.html", { plan }),
       hosted_checkout: { enabled: true },
       valid_until: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     });
