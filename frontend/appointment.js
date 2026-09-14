@@ -187,10 +187,26 @@ function generateDates() {
   container.innerHTML = "";
 
   const today = new Date();
-  monthHeader.textContent = today.toLocaleDateString("nl-NL", {
-    month: "long",
-    year: "numeric",
-  });
+
+  // The 14-day window below can cross into the next month (or, in December, the next year) — show
+  // both months in that case so dates like "1" aren't misread as still being in the first month.
+  const rangeEnd = new Date(today);
+  rangeEnd.setDate(today.getDate() + 13);
+  const startMonth = today.toLocaleDateString("nl-NL", { month: "long" });
+  const endMonth = rangeEnd.toLocaleDateString("nl-NL", { month: "long" });
+  const startYear = today.getFullYear();
+  const endYear = rangeEnd.getFullYear();
+
+  if (startMonth === endMonth && startYear === endYear) {
+    monthHeader.textContent = today.toLocaleDateString("nl-NL", {
+      month: "long",
+      year: "numeric",
+    });
+  } else if (startYear === endYear) {
+    monthHeader.textContent = `${startMonth} – ${endMonth} ${endYear}`;
+  } else {
+    monthHeader.textContent = `${startMonth} ${startYear} – ${endMonth} ${endYear}`;
+  }
 
   let dayOfWeek = today.getDay();
   let offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
