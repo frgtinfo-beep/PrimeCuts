@@ -46,6 +46,15 @@ const cancelModalClose = document.getElementById("cancelModalClose");
 const cancelModalConfirm = document.getElementById("cancelModalConfirm");
 const toast = document.getElementById("toast");
 
+const rescheduleModal = document.getElementById("rescheduleModal");
+const rescheduleModalText = document.getElementById("rescheduleModalText");
+const rescheduleModalClose = document.getElementById("rescheduleModalClose");
+const rescheduleCalendarMonth = document.getElementById("rescheduleCalendarMonth");
+const rescheduleDateContainer = document.getElementById("rescheduleDateContainer");
+const rescheduleTimeContainer = document.getElementById("rescheduleTimeContainer");
+const rescheduleError = document.getElementById("rescheduleError");
+const rescheduleSubmitBtn = document.getElementById("rescheduleSubmitBtn");
+
 let toastTimeout = null;
 function showToast(message, variant) {
   toast.textContent = message;
@@ -69,6 +78,25 @@ let pendingCancelId = null;
 
 function formatEuro(amount) {
   return Number(amount).toFixed(2).replace(".", ",");
+}
+
+// Matches APPOINTMENT_DURATION_MINUTES in frontend/appointment.js / primecuts-backend/src/utils/timeOverlap.js
+// — used below to build the reschedule picker's slot grid, same as the public booking page.
+const APPOINTMENT_DURATION_MINUTES = 35;
+
+function timeToMinutes(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function overlapsBlockedRange(time, blockedRanges) {
+  const start = timeToMinutes(time);
+  const end = start + APPOINTMENT_DURATION_MINUTES;
+  return blockedRanges.some((range) => {
+    const blockStart = timeToMinutes(range.startTime);
+    const blockEnd = timeToMinutes(range.endTime);
+    return start < blockEnd && end > blockStart;
+  });
 }
 
 // Every appointment/subscription field rendered below (customerName, customerEmail, customerPhone)
@@ -107,10 +135,16 @@ function statusBadge(appointment) {
     </span>`;
   }
 
-  return `<button type="button" data-cancel-id="${appointment._id}"
-      class="cancel-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-900 text-red-400 hover:bg-red-900/20 transition text-xs font-semibold uppercase tracking-wide">
-    <i class="fa-solid fa-xmark"></i> Annuleren
-  </button>`;
+  return `<div class="flex items-center gap-2">
+    <button type="button" data-reschedule-id="${appointment._id}"
+        class="reschedule-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-neutral-700 text-neutral-300 hover:border-accent/50 hover:text-accent transition text-xs font-semibold uppercase tracking-wide">
+      <i class="fa-solid fa-calendar-days"></i> Verzetten
+    </button>
+    <button type="button" data-cancel-id="${appointment._id}"
+        class="cancel-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-900 text-red-400 hover:bg-red-900/20 transition text-xs font-semibold uppercase tracking-wide">
+      <i class="fa-solid fa-xmark"></i> Annuleren
+    </button>
+  </div>`;
 }
 
 function appointmentCard(appointment) {
@@ -380,6 +414,9 @@ function renderCurrentView() {
 
   document.querySelectorAll(".cancel-btn").forEach((btn) => {
     btn.addEventListener("click", () => openCancelModal(btn.getAttribute("data-cancel-id")));
+  });
+  document.querySelectorAll(".reschedule-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openRescheduleModal(btn.getAttribute("data-reschedule-id")));
   });
 }
 
@@ -683,6 +720,262 @@ cancelModalConfirm.addEventListener("click", async () => {
   } finally {
     cancelModalConfirm.disabled = false;
     cancelModalConfirm.textContent = "Ja, Annuleren";
+  }
+});
+
+let pendingRescheduleId = null;
+let rescheduleState = { date: "", time: null };
+
+function updateRescheduleSubmitState() {
+  rescheduleSubmitBtn.disabled = !rescheduleState.date || !rescheduleState.time;
+}
+
+// Same 14-day, weekday-only window as the public booking page (frontend/appointment.js
+// generateDates) — the admin should never be able to pick outside what a customer could ever see.
+// Defaults to the appointment's own current date when that still falls in the window, so moving
+// it to a different time the same day is a single click; otherwise falls back to the first open
+// weekday, same as the public picker does.
+function generateRescheduleDates(preferredDate) {
+  rescheduleDateContainer.innerHTML = "";
+
+  const today = new Date();
+  const rangeEnd = new Date(today);
+  rangeEnd.setDate(today.getDate() + 13);
+  const startMonth = today.toLocaleDateString("nl-NL", { month: "long" });
+  const endMonth = rangeEnd.toLocaleDateString("nl-NL", { month: "long" });
+  const startYear = today.getFullYear();
+  const endYear = rangeEnd.getFullYear();
+  if (startMonth === endMonth && startYear === endYear) {
+    rescheduleCalendarMonth.textContent = today.toLocaleDateString("nl-NL", { month: "long", year: "numeric" });
+  } else if (startYear === endYear) {
+    rescheduleCalendarMonth.textContent = `${startMonth} – ${endMonth} ${endYear}`;
+  } else {
+    rescheduleCalendarMonth.textContent = `${startMonth} ${startYear} – ${endMonth} ${endYear}`;
+  }
+
+  let dayOfWeek = today.getDay();
+  let offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  for (let i = 0; i < offset; i++) {
+    rescheduleDateContainer.appendChild(document.createElement("div"));
+  }
+
+  const windowDates = [];
+  for (let i = 0; i < 14; i++) {
+    const dateObj = new Date(today);
+    dateObj.setDate(today.getDate() + i);
+    const day = dateObj.getDay();
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const d = String(dateObj.getDate()).padStart(2, "0");
+    windowDates.push({ fullDate: `${y}-${m}-${d}`, day: dateObj.getDate(), isWeekend: day === 0 || day === 6 });
+  }
+
+  const defaultDate =
+    preferredDate && windowDates.some((wd) => wd.fullDate === preferredDate && !wd.isWeekend)
+      ? preferredDate
+      : windowDates.find((wd) => !wd.isWeekend).fullDate;
+
+  windowDates.forEach(({ fullDate, day, isWeekend }) => {
+    const div = document.createElement("div");
+    div.setAttribute("data-date", fullDate);
+    div.setAttribute("data-weekend", isWeekend);
+
+    if (isWeekend) {
+      div.className = "reschedule-date-btn text-neutral-700 cursor-not-allowed flex items-center justify-center opacity-30 py-1.5";
+      div.textContent = day;
+    } else if (fullDate === defaultDate) {
+      div.className = "reschedule-date-btn flex justify-center items-center reschedule-active-date cursor-pointer py-1.5";
+      div.innerHTML = `<div class="w-7 h-7 rounded-full bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white flex items-center justify-center font-bold text-xs">${day}</div>`;
+    } else {
+      div.className = "reschedule-date-btn cursor-pointer hover:text-accent flex items-center justify-center py-1.5";
+      div.textContent = day;
+    }
+    rescheduleDateContainer.appendChild(div);
+  });
+
+  rescheduleState.date = defaultDate;
+  attachRescheduleDateListeners();
+}
+
+function attachRescheduleDateListeners() {
+  const dateBtns = rescheduleDateContainer.querySelectorAll(".reschedule-date-btn");
+  dateBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.getAttribute("data-weekend") === "true") return;
+
+      dateBtns.forEach((d) => {
+        d.classList.remove("reschedule-active-date");
+        const circle = d.querySelector("div");
+        if (circle) {
+          d.textContent = circle.textContent.trim();
+          if (d.getAttribute("data-weekend") !== "true") d.classList.add("hover:text-accent", "cursor-pointer");
+        }
+      });
+
+      const dateText = btn.textContent.trim();
+      btn.innerHTML = `<div class="w-7 h-7 rounded-full bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white flex items-center justify-center font-bold text-xs">${dateText}</div>`;
+      btn.classList.add("reschedule-active-date");
+      btn.classList.remove("hover:text-accent", "cursor-pointer");
+
+      rescheduleState.date = btn.getAttribute("data-date");
+      rescheduleState.time = null;
+      updateRescheduleSubmitState();
+      checkRescheduleAvailableTimes(rescheduleState.date);
+    });
+  });
+}
+
+function generateRescheduleTimeSlots() {
+  rescheduleTimeContainer.innerHTML = "";
+  let currentMin = 11 * 60;
+  const endMin = 19 * 60;
+  while (currentMin + APPOINTMENT_DURATION_MINUTES <= endMin) {
+    const h = Math.floor(currentMin / 60).toString().padStart(2, "0");
+    const m = (currentMin % 60).toString().padStart(2, "0");
+    const timeStr = `${h}:${m}`;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className =
+      "reschedule-time-btn py-2.5 rounded-lg border border-neutral-800 text-xs font-medium hover:border-accent/50 transition text-neutral-400 bg-cardbg";
+    btn.setAttribute("data-time", timeStr);
+    btn.textContent = timeStr;
+    rescheduleTimeContainer.appendChild(btn);
+
+    currentMin += APPOINTMENT_DURATION_MINUTES;
+  }
+  attachRescheduleTimeListeners();
+}
+
+function attachRescheduleTimeListeners() {
+  rescheduleTimeContainer.querySelectorAll(".reschedule-time-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.disabled) return;
+
+      rescheduleTimeContainer.querySelectorAll(".reschedule-time-btn").forEach((t) => {
+        if (t.disabled) return;
+        t.classList.remove("bg-gradient-to-b", "from-accent-light", "via-accent", "to-accent-dark", "text-white", "font-bold");
+        t.classList.add("border", "border-neutral-800", "text-neutral-400", "bg-cardbg");
+      });
+      btn.classList.remove("border", "border-neutral-800", "text-neutral-400", "bg-cardbg");
+      btn.classList.add("bg-gradient-to-b", "from-accent-light", "via-accent", "to-accent-dark", "text-white", "font-bold");
+
+      rescheduleState.time = btn.getAttribute("data-time");
+      updateRescheduleSubmitState();
+    });
+  });
+}
+
+// Same public endpoint the booking page itself uses for availability, so the admin sees exactly
+// the same open/taken slots a customer would. The appointment being moved is excluded from
+// "booked" for its own current date/time — two confirmed appointments can never share a
+// date+time (the booking flow's own collision check guarantees that), so matching on date+time
+// alone is equivalent to matching by id here.
+async function checkRescheduleAvailableTimes(selectedDate) {
+  const appointment = allAppointments.find((a) => a._id === pendingRescheduleId);
+
+  const [y, m, d] = selectedDate.split("-").map(Number);
+  const day = new Date(y, m - 1, d).getDay();
+  if (day === 0 || day === 6) {
+    rescheduleTimeContainer.innerHTML = `<div class="col-span-full text-center py-6 text-neutral-500 text-xs">Gesloten in het weekend.</div>`;
+    return;
+  }
+  if (rescheduleTimeContainer.children.length === 0 || rescheduleTimeContainer.querySelector(".col-span-full")) {
+    generateRescheduleTimeSlots();
+  }
+
+  const timeBtns = rescheduleTimeContainer.querySelectorAll(".reschedule-time-btn");
+  timeBtns.forEach((btn) => {
+    btn.disabled = false;
+    btn.classList.remove("line-through", "text-neutral-700", "cursor-not-allowed", "opacity-50", "border-transparent", "bg-neutral-900");
+    btn.classList.add("bg-cardbg");
+    if (btn.getAttribute("data-time") !== rescheduleState.time) {
+      btn.classList.add("border-neutral-800", "text-neutral-400");
+    }
+  });
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/appointments?date=${selectedDate}`);
+    const result = await response.json();
+    if (!result.success) return;
+
+    const bookedTimes = result.data
+      .map((a) => a.time)
+      .filter((t) => !(appointment && appointment.date === selectedDate && appointment.time === t));
+    const blockedRanges = result.blockedRanges || [];
+
+    timeBtns.forEach((btn) => {
+      const btnTime = btn.getAttribute("data-time");
+      if (bookedTimes.includes(btnTime) || overlapsBlockedRange(btnTime, blockedRanges)) {
+        btn.disabled = true;
+        btn.classList.remove(
+          "hover:border-accent/50", "bg-gradient-to-b", "from-accent-light", "via-accent", "to-accent-dark",
+          "text-white", "font-bold", "border-neutral-800", "text-neutral-400", "bg-cardbg",
+        );
+        btn.classList.add("line-through", "text-neutral-700", "cursor-not-allowed", "opacity-50", "border-transparent", "bg-neutral-900");
+
+        if (rescheduleState.time === btnTime) {
+          rescheduleState.time = null;
+          updateRescheduleSubmitState();
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching reschedule availability:", error);
+  }
+}
+
+function openRescheduleModal(appointmentId) {
+  const appointment = allAppointments.find((a) => a._id === appointmentId);
+  if (!appointment) return;
+
+  pendingRescheduleId = appointmentId;
+  rescheduleError.classList.add("hidden");
+  rescheduleModalText.textContent = `Huidige afspraak: ${appointment.customerName} — ${appointment.date} om ${appointment.time}.${appointment.subscriptionId ? " Let op: dit is een vaste plek (abonnement) — dit verzet alleen deze ene afspraak, niet de terugkerende reeks." : ""}`;
+
+  rescheduleState = { date: "", time: null };
+  generateRescheduleDates(appointment.date);
+  checkRescheduleAvailableTimes(rescheduleState.date);
+  updateRescheduleSubmitState();
+
+  rescheduleModal.classList.remove("hidden");
+}
+
+function closeRescheduleModal() {
+  rescheduleModal.classList.add("hidden");
+  pendingRescheduleId = null;
+}
+
+rescheduleModalClose.addEventListener("click", closeRescheduleModal);
+
+rescheduleSubmitBtn.addEventListener("click", async () => {
+  if (!pendingRescheduleId || !rescheduleState.date || !rescheduleState.time) return;
+
+  rescheduleError.classList.add("hidden");
+  rescheduleSubmitBtn.disabled = true;
+  rescheduleSubmitBtn.textContent = "Bezig...";
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/admin/appointments/${pendingRescheduleId}/reschedule`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: rescheduleState.date, time: rescheduleState.time }),
+    });
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Verzetten mislukt.");
+    }
+
+    closeRescheduleModal();
+    await fetchAppointments();
+    showToast("Afspraak verzet. De klant is per e-mail op de hoogte gebracht.", "success");
+  } catch (error) {
+    rescheduleError.textContent = error.message;
+    rescheduleError.classList.remove("hidden");
+    rescheduleSubmitBtn.disabled = false;
+  } finally {
+    rescheduleSubmitBtn.textContent = "Verzetten";
   }
 });
 

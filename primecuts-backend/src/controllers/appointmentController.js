@@ -332,7 +332,10 @@ const createAppointment = async (req, res) => {
     const depositAmount = roundToCents(servicePriceSubtotal * DEPOSIT_RATIO);
     const amountCharged = roundToCents(depositAmount + checkoutFee);
 
-    // Hold the slot while payment is pending so another customer cannot reserve it.
+    // Hold the slot while payment is pending so another customer cannot reserve it. This check is
+    // just a fast path for the common case (a clean error without hitting the database's error
+    // path) — the actual guarantee against two customers grabbing the same slot is the unique
+    // index on (date, time) in the Appointment model, enforced below.
     const existing = await Appointment.findOne({
       date,
       time,
@@ -345,20 +348,29 @@ const createAppointment = async (req, res) => {
         .json({ error: "This time slot is already taken." });
     }
 
-    createdAppointment = await Appointment.create({
-      customerName,
-      customerEmail,
-      customerPhone,
-      service,
-      addons,
-      date,
-      time,
-      totalPrice,
-      depositAmount,
-      checkoutFee,
-      status: "pending",
-      paymentProvider: "sumup",
-    });
+    try {
+      createdAppointment = await Appointment.create({
+        customerName,
+        customerEmail,
+        customerPhone,
+        service,
+        addons,
+        date,
+        time,
+        totalPrice,
+        depositAmount,
+        checkoutFee,
+        status: "pending",
+        paymentProvider: "sumup",
+      });
+    } catch (createError) {
+      // Someone else's hold landed on this exact slot between the check above and this insert —
+      // the unique index caught it. Same clean response as the pre-check above finding it first.
+      if (createError.code === 11000) {
+        return res.status(400).json({ error: "This time slot is already taken." });
+      }
+      throw createError;
+    }
 
     if (!process.env.SUMUP_API_KEY || !process.env.SUMUP_MERCHANT_CODE) {
       await Appointment.findByIdAndDelete(createdAppointment._id);
@@ -459,21 +471,29 @@ const createSubscription = async (req, res) => {
       status: "pending",
     });
 
-    createdAppointment = await Appointment.create({
-      customerName,
-      customerEmail,
-      customerPhone,
-      service: "Abonnement",
-      addons: [],
-      date,
-      time,
-      totalPrice: price,
-      depositAmount: price,
-      checkoutFee: 0,
-      status: "pending",
-      paymentProvider: "sumup",
-      subscriptionId: createdSubscription._id,
-    });
+    try {
+      createdAppointment = await Appointment.create({
+        customerName,
+        customerEmail,
+        customerPhone,
+        service: "Abonnement",
+        addons: [],
+        date,
+        time,
+        totalPrice: price,
+        depositAmount: price,
+        checkoutFee: 0,
+        status: "pending",
+        paymentProvider: "sumup",
+        subscriptionId: createdSubscription._id,
+      });
+    } catch (createError) {
+      if (createError.code === 11000) {
+        await Subscription.findByIdAndDelete(createdSubscription._id);
+        return res.status(400).json({ error: "This time slot is already taken." });
+      }
+      throw createError;
+    }
 
     createdSubscription.firstAppointmentId = createdAppointment._id;
     await createdSubscription.save();

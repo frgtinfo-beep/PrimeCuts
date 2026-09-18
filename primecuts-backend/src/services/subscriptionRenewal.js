@@ -91,21 +91,46 @@ async function generateUpcomingSubscriptionAppointments() {
         continue;
       }
 
-      const newAppointment = await Appointment.create({
-        customerName: subscription.customerName,
-        customerEmail: subscription.customerEmail,
-        customerPhone: subscription.customerPhone,
-        service: "Abonnement",
-        addons: [],
-        date: nextDate,
-        time: subscription.time,
-        totalPrice: subscription.price,
-        depositAmount: subscription.price,
-        checkoutFee: 0,
-        status: "confirmed",
-        paymentProvider: "subscription",
-        subscriptionId: subscription._id,
-      });
+      let newAppointment;
+      try {
+        newAppointment = await Appointment.create({
+          customerName: subscription.customerName,
+          customerEmail: subscription.customerEmail,
+          customerPhone: subscription.customerPhone,
+          service: "Abonnement",
+          addons: [],
+          date: nextDate,
+          time: subscription.time,
+          totalPrice: subscription.price,
+          depositAmount: subscription.price,
+          checkoutFee: 0,
+          status: "confirmed",
+          paymentProvider: "subscription",
+          subscriptionId: subscription._id,
+        });
+      } catch (createError) {
+        // The slotTaken pre-check above just missed a race (something else claimed this exact
+        // date+time a moment later) — same outcome as if the pre-check had caught it: flag for a
+        // human, try again next sweep, rather than letting this surface only as a console log.
+        if (createError.code === 11000) {
+          console.error(
+            "MANUAL FOLLOW-UP REQUIRED:",
+            JSON.stringify({
+              stage: "subscription_renewal",
+              reason: "slot_taken",
+              subscriptionId: subscription._id.toString(),
+              customerName: subscription.customerName,
+              date: nextDate,
+              time: subscription.time,
+            }),
+          );
+          await Subscription.findByIdAndUpdate(subscription._id, {
+            $set: { renewalIssue: "slot_taken", renewalIssueDate: nextDate, renewalIssueAt: new Date() },
+          });
+          continue;
+        }
+        throw createError;
+      }
 
       // Clears any stale flag from a previous cycle that failed to renew — this cycle just
       // succeeded, so whatever conflict caused that has since been resolved.

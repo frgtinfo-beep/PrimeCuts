@@ -3,6 +3,7 @@ const Appointment = require("../models/Appointment");
 const BlockedTime = require("../models/BlockedTime");
 const Subscription = require("../models/Subscription");
 const { sendCancellationEmail } = require("../services/cancellationEmail");
+const { sendRescheduleEmail } = require("../services/rescheduleEmail");
 const { scheduleBranchCancellation } = require("../services/branchReporter");
 const { refundAppointment } = require("../services/refundService");
 const { overlapsBlockedRange } = require("../utils/timeOverlap");
@@ -91,6 +92,98 @@ const cancelAppointmentByAdmin = async (req, res) => {
   } catch (error) {
     console.error("Admin cancel appointment error:", error);
     res.status(500).json({ error: "Annuleren mislukt." });
+  }
+};
+
+// Moves a confirmed booking to a different open slot without touching payment at all — no
+// cancellation, no refund, no rebooking. Existed because the only prior way to "move" an
+// appointment was cancel (triggering a refund) + have the customer book again + admin re-refunds
+// manually if that new booking never happens.
+//
+// The actual guarantee against two active appointments ever sharing a slot is the unique index on
+// (date, time) in the Appointment model — not a check-then-save race here. A reschedule
+// deliberately gets priority over a slot held only by a "pending" (unpaid) checkout: that's just
+// someone mid-checkout or an abandoned attempt, not a real booking, so this releases it and takes
+// the slot instead of failing. It never bumps an already-"confirmed" (paid) appointment — that
+// still comes back as a clean "already taken" error. In the vanishingly rare case a preempted
+// pending hold's payment actually does land moments later, the webhook/redirect confirm flow's own
+// independent collision check (resolveCheckoutStatus) catches that and reports it as a genuine
+// payment-issue for a human, same as any other same-slot collision.
+const rescheduleAppointmentByAdmin = async (req, res) => {
+  try {
+    const { date, time } = req.body || {};
+    const isDate = typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date);
+    const isTime = typeof time === "string" && /^\d{2}:\d{2}$/.test(time);
+    if (!isDate || !isTime) {
+      return res.status(400).json({ error: "Ongeldige datum of tijd." });
+    }
+
+    const appointment = await Appointment.findById(req.params.appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ error: "Afspraak niet gevonden." });
+    }
+    if (appointment.status !== "confirmed") {
+      return res.status(400).json({ error: "Alleen bevestigde afspraken kunnen worden verzet." });
+    }
+    if (date === appointment.date && time === appointment.time) {
+      return res.status(400).json({ error: "Dit is al de huidige datum en tijd." });
+    }
+
+    const blockedRanges = await BlockedTime.find({ date }).select("startTime endTime -_id");
+    if (overlapsBlockedRange(time, blockedRanges)) {
+      return res.status(400).json({ error: "Dit tijdslot is geblokkeerd." });
+    }
+
+    const oldDate = appointment.date;
+    const oldTime = appointment.time;
+
+    const attemptMove = async () => {
+      appointment.date = date;
+      appointment.time = time;
+      await appointment.save();
+    };
+
+    try {
+      await attemptMove();
+    } catch (saveError) {
+      if (saveError.code !== 11000) throw saveError;
+
+      const blocker = await Appointment.findOne({
+        _id: { $ne: appointment._id },
+        date,
+        time,
+        status: { $in: ["pending", "confirmed"] },
+      });
+
+      if (blocker && blocker.status === "confirmed") {
+        return res.status(400).json({ error: "Dit tijdslot is al bezet." });
+      }
+
+      // A pending hold was in the way (or it cleared itself between the failed save and this
+      // lookup) — preempt it and retry once. Bounded to a single retry: if this still collides,
+      // something else genuinely confirmed into the slot in that same instant.
+      if (blocker) {
+        await Appointment.findByIdAndUpdate(blocker._id, {
+          $set: { status: "expired", releasedReason: "admin_reschedule", releasedAt: new Date() },
+        });
+      }
+
+      try {
+        await attemptMove();
+      } catch (retryError) {
+        if (retryError.code === 11000) {
+          return res.status(400).json({ error: "Dit tijdslot is al bezet." });
+        }
+        throw retryError;
+      }
+    }
+
+    await sendRescheduleEmail(appointment, oldDate, oldTime);
+
+    res.json({ success: true, data: appointment });
+  } catch (error) {
+    console.error("Admin reschedule appointment error:", error);
+    res.status(500).json({ error: "Verzetten mislukt." });
   }
 };
 
@@ -223,6 +316,7 @@ module.exports = {
   checkSession,
   listAppointments,
   cancelAppointmentByAdmin,
+  rescheduleAppointmentByAdmin,
   listBlockedTimes,
   createBlockedTime,
   deleteBlockedTime,

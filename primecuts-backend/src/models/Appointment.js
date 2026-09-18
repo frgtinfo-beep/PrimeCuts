@@ -24,7 +24,13 @@ const appointmentSchema = new mongoose.Schema({
   status: { type: String, enum: ["pending", "confirmed", "cancelled", "expired"], default: "pending" },
   // Why/when an "expired" appointment was released — for forensics, and so the self-healing sweep
   // (reconcileExpiredCheckouts in server.js) knows which ones are worth re-checking against SumUp.
-  releasedReason: { type: String, enum: ["failed", "expired", "past_validity", "collision"] },
+  // "admin_reschedule" = this was still just a pending (unpaid) hold when an admin's reschedule
+  // claimed its slot — deliberately kept separate from "collision" so it never shows up in the
+  // urgent "Betaald, Geen Plek" panel, which is specifically for holds whose payment had actually
+  // gone through. If a pending hold like this *had* just been paid for, the webhook/redirect
+  // confirm flow's own race-detection still catches that independently (see resolveCheckoutStatus)
+  // and reports it as a genuine "collision" once it discovers the slot is now taken.
+  releasedReason: { type: String, enum: ["failed", "expired", "past_validity", "collision", "admin_reschedule"] },
   releasedAt: { type: Date },
   // Set when this appointment is one occurrence of a recurring membership (see models/Subscription).
   subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: "Subscription" },
@@ -59,5 +65,16 @@ const appointmentSchema = new mongoose.Schema({
   branchCancellationNextAttemptAt: { type: Date },
   branchCancellationLastError: { type: String },
 });
+
+// Enforced at the database level, not just in application code — the actual guarantee that two
+// appointments (a fresh booking, an admin reschedule, a subscription renewal — anything) can never
+// both hold the same date+time. A "pending" hold counts too, so two customers can't even both be
+// mid-checkout for the same slot; only one "expired"/"cancelled" row per slot is unrestricted, since
+// those no longer occupy anything. Every write that can set date/time on an active appointment must
+// handle the resulting duplicate-key error (Mongo error code 11000) instead of assuming success.
+appointmentSchema.index(
+  { date: 1, time: 1 },
+  { unique: true, partialFilterExpression: { status: { $in: ["pending", "confirmed"] } } },
+);
 
 module.exports = mongoose.model("Appointment", appointmentSchema);

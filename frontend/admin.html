@@ -237,6 +237,54 @@
         </div>
     </div>
 
+    <!-- Reschedule modal -->
+    <div id="rescheduleModal" class="fixed inset-0 hidden z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
+        <div class="bg-panelbg border border-neutral-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-8">
+            <h2 class="font-bebas uppercase text-2xl mb-3 tracking-wide">Afspraak Verzetten</h2>
+            <p id="rescheduleModalText" class="text-neutral-400 mb-6 text-sm"></p>
+
+            <!-- Same date/time picker as the public booking page, so the admin only ever sees
+                 (and can only pick) slots that are actually open — no risk of double-booking. -->
+            <div class="grid sm:grid-cols-[260px_1fr] gap-6 mb-4">
+                <div class="bg-appbg border border-neutral-800 rounded-xl p-5">
+                    <h3 id="rescheduleCalendarMonth" class="text-center font-semibold mb-4 font-mono text-xs tracking-wide text-neutral-300 uppercase"></h3>
+                    <div class="grid grid-cols-7 text-center text-[10px] uppercase tracking-wide text-neutral-500 mb-3 font-mono">
+                        <div>Ma</div>
+                        <div>Di</div>
+                        <div>Wo</div>
+                        <div>Do</div>
+                        <div>Vr</div>
+                        <div>Za</div>
+                        <div>Zo</div>
+                    </div>
+                    <div id="rescheduleDateContainer" class="grid grid-cols-7 gap-2 text-center text-sm"></div>
+                </div>
+                <div>
+                    <p class="text-xs uppercase tracking-widest text-neutral-500 mb-3 font-mono">Beschikbare Tijden</p>
+                    <div id="rescheduleTimeContainer" class="grid grid-cols-3 sm:grid-cols-4 gap-2"></div>
+                </div>
+            </div>
+
+            <div id="rescheduleError" class="hidden mb-4 rounded-xl border border-red-500 bg-red-900/20 text-red-300 p-3 text-sm"></div>
+
+            <p class="text-neutral-500 text-xs mb-6">
+                De betaling blijft ongewijzigd — er wordt niets terugbetaald of opnieuw
+                gefactureerd. De klant krijgt automatisch een e-mail met de nieuwe datum en tijd.
+            </p>
+
+            <div class="flex gap-3">
+                <button id="rescheduleModalClose" type="button"
+                    class="flex-1 py-3 rounded-xl border border-neutral-700 hover:border-neutral-500 transition font-semibold text-sm">
+                    Terug
+                </button>
+                <button id="rescheduleSubmitBtn" type="button" disabled
+                    class="flex-1 py-3 rounded-xl bg-gradient-to-b from-accent-light via-accent to-accent-dark font-bold text-sm uppercase tracking-wide transition-all hover:-translate-y-0.5 disabled:bg-neutral-800 disabled:bg-none disabled:text-neutral-500 disabled:cursor-not-allowed disabled:hover:translate-y-0">
+                    Verzetten
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="admin.js"></script>
 </body>
 </html>
