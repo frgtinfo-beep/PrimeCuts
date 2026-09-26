@@ -18,7 +18,7 @@ const extractSuccessfulTransaction = (checkout) => {
 };
 
 const reportBody = (appointment) => ({
-  client_id: "business-a",
+  client_id: "primecuts",
   amount: appointment.branchTransactionAmount,
   currency: "EUR",
   transaction_id: appointment.branchTransactionId,
