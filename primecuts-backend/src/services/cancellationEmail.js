@@ -1,6 +1,6 @@
 const nodemailer = require("nodemailer");
 
-const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecutsnl.nl").replace(/\/$/, "");
+const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecutsnl.com").replace(/\/$/, "");
 
 const mailTransporter =
   process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD

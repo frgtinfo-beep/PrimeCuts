@@ -11,7 +11,7 @@ const mailTransporter =
       })
     : null;
 
-const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecutsnl.nl").replace(/\/$/, "");
+const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecutsnl.com").replace(/\/$/, "");
 
 // customerName is filled in by whoever booked — escape before interpolating into the HTML email so
 // a name like "<img src=x onerror=...>" can't run in whatever renders it.

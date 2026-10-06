@@ -8,7 +8,7 @@ const { default: SumUp } = require("@sumup/sdk");
 const { scheduleBranchReport } = require("../services/branchReporter");
 const { overlapsBlockedRange } = require("../utils/timeOverlap");
 
-const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecutsnl.nl").replace(/\/$/, "");
+const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecutsnl.com").replace(/\/$/, "");
 
 // Real prices, kept here so we don't trust whatever price the browser sends us.
 // Keep this in sync with the data-price values in frontend/appointment.html.
