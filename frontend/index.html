@@ -10,6 +10,7 @@
       name="description"
       content="PrimeCuts is dé black barber in Lelystad. Onze kapper staat voor fresh fades, scherpe contouren en baardstyling. Boek eenvoudig je afspraak online."
     />
+    <link rel="preload" as="image" href="./image/PrimeCuts_homepage_poster.jpg" />
     <link rel="canonical" href="https://primecutsnl.com/" />
 
     <!-- Open Graph -->
@@ -511,14 +512,27 @@
 
       <!-- Background video -->
       <video
+        id="hero-video"
         autoplay
         muted
         loop
         playsinline
+        preload="auto"
+        poster="./image/PrimeCuts_homepage_poster.jpg"
         class="absolute inset-0 w-full h-full object-cover z-0"
       >
         <source src="./image/PrimeCuts_homepage.mp4" type="video/mp4" />
       </video>
+      <script>
+        // Some browsers skip autoplay; kick it off as soon as data is available
+        (function () {
+          var v = document.getElementById("hero-video");
+          v.muted = true;
+          var play = function () { var p = v.play(); if (p) p.catch(function () {}); };
+          play();
+          v.addEventListener("canplay", play, { once: true });
+        })();
+      </script>
 
       <!-- Scrim for legibility -->
       <div
