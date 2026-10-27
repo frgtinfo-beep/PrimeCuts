@@ -2,8 +2,10 @@ require('dotenv').config();
 const app = require('./src/app');
 const connectDB = require('./src/config/db'); // Import the database connection
 const { retryPendingBranchReports, retryPendingBranchCancellations } = require('./src/services/branchReporter');
-const { reconcilePendingCheckouts, reconcileExpiredCheckouts } = require('./src/controllers/appointmentController');
+const { reconcilePendingCheckouts, reconcileExpiredCheckouts, retryPendingConfirmationEmails } = require('./src/controllers/appointmentController');
 const { generateUpcomingSubscriptionAppointments } = require('./src/services/subscriptionRenewal');
+const { sendAppointmentReminders } = require('./src/services/reminderEmail');
+const { runMonthlyBilling, reconcilePendingSignups } = require('./src/services/subscriptionBilling');
 
 // Connect to MongoDB
 connectDB();
@@ -61,3 +63,38 @@ setInterval(() => {
         console.error('Subscription renewal sweep failed:', error.message);
     });
 }, SUBSCRIPTION_RENEWAL_INTERVAL_MS);
+
+// Subscription billing: the automatic charge on the 1st of each month plus daily retries / pausing of
+// failed ones (only acts from 09:00 shop time), and finishing or releasing signups whose page never
+// reported back — see subscriptionBilling.js. Checked often; each run is a no-op when nothing's due.
+const BILLING_INTERVAL_MS = 30 * 60 * 1000;
+setInterval(() => {
+    runMonthlyBilling().catch((error) => {
+        console.error('Subscription billing sweep failed:', error.message);
+    });
+}, BILLING_INTERVAL_MS);
+const SIGNUP_RECONCILE_INTERVAL_MS = 2 * 60 * 1000;
+setInterval(() => {
+    reconcilePendingSignups().catch((error) => {
+        console.error('Subscription signup reconciliation failed:', error.message);
+    });
+}, SIGNUP_RECONCILE_INTERVAL_MS);
+
+// Re-sends confirmation emails that failed to go out (mail server down at the moment of payment) —
+// see deliverConfirmationEmail in appointmentController.js.
+const CONFIRMATION_RETRY_INTERVAL_MS = 5 * 60 * 1000;
+setInterval(() => {
+    retryPendingConfirmationEmails().catch((error) => {
+        console.error('Confirmation email retry sweep failed:', error.message);
+    });
+}, CONFIRMATION_RETRY_INTERVAL_MS);
+
+// Day-before reminder emails for every confirmed appointment (regular and subscription) — see
+// reminderEmail.js. Only actually sends between 10:00 and 21:00 shop time; checking every 15 min
+// means a restart or a failed send never delays a reminder by much.
+const REMINDER_INTERVAL_MS = 15 * 60 * 1000;
+setInterval(() => {
+    sendAppointmentReminders().catch((error) => {
+        console.error('Reminder email sweep failed:', error.message);
+    });
+}, REMINDER_INTERVAL_MS);

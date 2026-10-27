@@ -1,4 +1,5 @@
 const nodemailer = require("nodemailer");
+const { formatDateNl } = require("../utils/shopTime");
 
 const mailTransporter =
   process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD
@@ -18,6 +19,22 @@ const FRONTEND_URL = (process.env.FRONTEND_BASE_URL || "https://primecutsnl.com"
 const escapeHtml = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 
+// What changes (nothing) about the money — depends on what was actually paid online for this visit:
+// a subscription visit after the first had nothing paid online, so "your deposit stays the same"
+// would be wrong there.
+const paymentNote = (appointment) => {
+  if (appointment.subscriptionId) {
+    return "Je hoeft niets te doen — deze afspraak is al betaald via je abonnement.";
+  }
+  if (!appointment.depositAmount) {
+    return "Je hoeft niets te doen — betalen doe je zoals altijd in de winkel.";
+  }
+  if (appointment.depositAmount >= appointment.totalPrice - (appointment.checkoutFee || 0)) {
+    return "Je betaling blijft gewoon staan — je hoeft niets opnieuw te doen.";
+  }
+  return "Je aanbetaling blijft gewoon staan — je hoeft niets opnieuw te doen.";
+};
+
 const buildRescheduleEmailHtml = (appointment, oldDate, oldTime) => `<!DOCTYPE html>
 <html>
   <body style="margin:0;padding:0;background:#050505;">
@@ -32,18 +49,18 @@ const buildRescheduleEmailHtml = (appointment, oldDate, oldTime) => `<!DOCTYPE h
           <td style="background:#111111;border-radius:16px;border:1px solid #262626;padding:32px 24px;">
             <p style="margin:0 0 8px;color:#e5342a;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">Afspraak verzet</p>
             <h1 style="margin:0 0 20px;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;">Nieuwe Datum &amp; Tijd</h1>
-            <p style="margin:0 0 24px;color:#a3a3a3;font-size:15px;line-height:1.6;">Hoi ${escapeHtml(appointment.customerName)}, je afspraak bij PrimeCuts is verzet van ${oldDate} om ${oldTime} naar:</p>
+            <p style="margin:0 0 24px;color:#a3a3a3;font-size:15px;line-height:1.6;">Hoi ${escapeHtml(appointment.customerName)}, je afspraak bij PrimeCuts is verzet van ${formatDateNl(oldDate)} om ${oldTime} naar:</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0A;border-radius:12px;border:1px solid #262626;margin-bottom:24px;">
               <tr>
                 <td style="padding:14px 16px;color:#737373;font-size:13px;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #1f1f1f;">Datum</td>
-                <td style="padding:14px 16px;color:#ffffff;font-size:14px;font-weight:600;font-family:Arial,Helvetica,sans-serif;text-align:right;border-bottom:1px solid #1f1f1f;">${appointment.date}</td>
+                <td style="padding:14px 16px;color:#ffffff;font-size:14px;font-weight:600;font-family:Arial,Helvetica,sans-serif;text-align:right;border-bottom:1px solid #1f1f1f;">${formatDateNl(appointment.date)}</td>
               </tr>
               <tr>
                 <td style="padding:14px 16px;color:#737373;font-size:13px;font-family:Arial,Helvetica,sans-serif;">Tijd</td>
                 <td style="padding:14px 16px;color:#ffffff;font-size:14px;font-weight:600;font-family:Arial,Helvetica,sans-serif;text-align:right;">${appointment.time}</td>
               </tr>
             </table>
-            <p style="margin:0 0 24px;color:#a3a3a3;font-size:15px;line-height:1.6;">Je betaling en aanbetaling blijven ongewijzigd — je hoeft niets opnieuw te doen. Neem contact met ons op als dit nieuwe moment niet uitkomt.</p>
+            <p style="margin:0 0 24px;color:#a3a3a3;font-size:15px;line-height:1.6;">${paymentNote(appointment)} Neem contact met ons op als dit nieuwe moment niet uitkomt.</p>
             <p style="margin:24px 0 0;color:#737373;font-size:13px;line-height:1.6;">Tot dan!<br>PrimeCuts Barbershop</p>
           </td>
         </tr>
@@ -69,9 +86,9 @@ const sendRescheduleEmail = async (appointment, oldDate, oldTime) => {
       subject: "Je afspraak bij PrimeCuts is verzet",
       text: `Hoi ${appointment.customerName},
 
-Je afspraak bij PrimeCuts is verzet van ${oldDate} om ${oldTime} naar ${appointment.date} om ${appointment.time}.
+Je afspraak bij PrimeCuts is verzet van ${formatDateNl(oldDate)} om ${oldTime} naar ${formatDateNl(appointment.date)} om ${appointment.time}.
 
-Je betaling en aanbetaling blijven ongewijzigd — je hoeft niets opnieuw te doen. Neem contact met ons op als dit nieuwe moment niet uitkomt.
+${paymentNote(appointment)} Neem contact met ons op als dit nieuwe moment niet uitkomt.
 
 Tot dan!
 PrimeCuts`,

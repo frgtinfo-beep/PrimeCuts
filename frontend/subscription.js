@@ -3,367 +3,707 @@
 const API_BASE_URL = "";
 
 let state = {
+  plan: null,
   date: "",
   time: null,
-  plan: "monthly",
+  // Result of /subscriptions/preview for the current plan+date+time: { upcoming, conflictDate }.
+  preview: null,
+  previewLoading: false,
+  submitting: false,
 };
 
-// Must match SUBSCRIPTION_PRICES in primecuts-backend/src/controllers/appointmentController.js.
-const PLAN_PRICES = { monthly: "32,50", weekly: "35,00" };
-const PLAN_NOTES = {
-  monthly:
-    "Je betaalt nu de eerste knipbeurt. Daarna staat je plek elke maand automatisch vast — betaling doe je in de winkel.",
-  weekly:
-    "Je betaalt nu de eerste knipbeurt. Daarna staat je plek elke week automatisch vast — betaling doe je in de winkel.",
-};
-const RECURRENCE_NOTES = {
-  monthly:
-    "Elke maand rond dezelfde datum wordt automatisch dezelfde tijd voor je vastgelegd. Valt die datum een maand op een weekend, dan schuift 'm door naar de eerstvolgende maandag.",
-  weekly: "Elke week wordt automatisch dezelfde dag en tijd voor je vastgelegd.",
-};
+// Plans and prices come from the backend (primecuts-backend/src/config/subscriptionPlans.js), so a
+// price change there shows up here without touching this file.
+let plans = [];
 
-document.querySelectorAll('input[name="plan"]').forEach((input) => {
-  input.addEventListener("change", () => {
-    state.plan = input.value;
+const formatEuro = (amount) => amount.toFixed(2).replace(".", ",");
+const pad2 = (n) => String(n).padStart(2, "0");
+const toDateStr = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const parseDateStr = (str) => {
+  const [y, m, d] = str.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+// "vr 30 okt"
+const shortDate = (str) =>
+  parseDateStr(str).toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" });
+const weekdayName = (str) => parseDateStr(str).toLocaleDateString("nl-NL", { weekday: "long" });
 
-    document.querySelectorAll(".plan-option").forEach((label) => {
-      const isSelected = label.querySelector('input[name="plan"]').checked;
-      label.classList.toggle("border-accent", isSelected);
-      label.classList.toggle("border-transparent", !isSelected);
+function scheduleText(planId, dateStr, time) {
+  if (!planId || !dateStr || !time) return null;
+  if (planId === "weekly") return `Elke ${weekdayName(dateStr)} om ${time}`;
+  if (planId === "biweekly") return `Om de week op ${weekdayName(dateStr)} om ${time}`;
+  return `Elke maand rond de ${parseDateStr(dateStr).getDate()}e om ${time}`;
+}
+
+const RECURRENCE_TEXT = { weekly: "elke week", biweekly: "om de week", monthly: "elke maand" };
+
+// Every async refresh (times, preview) is tagged so a slow response for a date/time the customer
+// already clicked away from can never overwrite the newer one.
+let timesRequestId = 0;
+let previewRequestId = 0;
+
+// ---------------------------------------------------------------- STEP 1: PLAN
+async function loadPlans() {
+  const container = document.getElementById("planOptions");
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/appointments/subscriptions/plans`);
+    const result = await response.json();
+    if (!response.ok || !result.success || !result.data.length) throw new Error();
+    plans = result.data;
+  } catch (error) {
+    container.innerHTML = `<p class="text-red-300 text-sm col-span-full">Abonnementen konden niet geladen worden. Ververs de pagina of probeer het later opnieuw.</p>`;
+    render();
+    return;
+  }
+
+  container.innerHTML = "";
+  plans.forEach((plan) => {
+    const label = document.createElement("label");
+    label.className =
+      "plan-card relative block bg-cardbg border border-neutral-800 hover:border-neutral-600 rounded-2xl p-4 cursor-pointer";
+    label.innerHTML = `
+      <input type="radio" name="plan" class="sr-only">
+      <span class="plan-check absolute top-3 right-3 w-5 h-5 rounded-full bg-accent text-white inline-flex items-center justify-center">
+        <i class="fa-solid fa-check text-[10px]"></i>
+      </span>
+      <span class="plan-label block font-semibold pr-6"></span>
+      <span class="plan-description block text-neutral-500 text-xs mt-1 leading-snug"></span>
+      <span class="block mt-3 font-bebas text-2xl tracking-wide">&euro;${formatEuro(plan.monthlyPrice)}<span class="font-sans text-neutral-500 text-xs"> / maand</span></span>`;
+    const input = label.querySelector("input");
+    input.value = plan.id;
+    label.querySelector(".plan-label").textContent = plan.label;
+    label.querySelector(".plan-description").textContent = plan.description;
+    input.addEventListener("change", () => {
+      state.plan = plan.id;
+      refreshPreview();
+      render();
     });
-
-    document.getElementById("planPrice").innerHTML = `&euro;${PLAN_PRICES[state.plan]}`;
-    document.getElementById("planNote").textContent = PLAN_NOTES[state.plan];
-    document.getElementById("recurrenceNote").textContent = RECURRENCE_NOTES[state.plan];
+    container.appendChild(label);
   });
-});
 
-// --- DATE + TIME PICKER (same weekday-only, 35min-interval pattern as appointment.js) ---
+  // Coming back from the homepage or SumUp with a plan in the URL keeps that choice.
+  const fromUrl = new URLSearchParams(window.location.search).get("plan");
+  const initial = plans.find((p) => p.id === fromUrl) || plans[0];
+  container.querySelector(`input[value="${initial.id}"]`).checked = true;
+  state.plan = initial.id;
+  refreshPreview();
+  render();
+}
+
+// ---------------------------------------------------------------- STEP 2: DAY + TIME
+// Must match the slot grid in primecuts-backend/src/utils/timeOverlap.js (isBookableSlotTime).
+const OPENING_MINUTES = 11 * 60;
+const CLOSING_MINUTES = 19 * 60;
+const APPOINTMENT_DURATION_MINUTES = 35;
+const DAYS_SHOWN = 14;
+
+const timeToMinutes = (hhmm) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+};
+
+function allSlotTimes() {
+  const times = [];
+  for (let min = OPENING_MINUTES; min + APPOINTMENT_DURATION_MINUTES <= CLOSING_MINUTES; min += APPOINTMENT_DURATION_MINUTES) {
+    times.push(`${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`);
+  }
+  return times;
+}
+
+// Slots that have already started today aren't offered at all (the server refuses them too).
+function isPastSlot(dateStr, time) {
+  const now = new Date();
+  if (dateStr !== toDateStr(now)) return false;
+  return timeToMinutes(time) <= now.getHours() * 60 + now.getMinutes();
+}
+
+const isWeekend = (date) => date.getDay() === 0 || date.getDay() === 6;
+
 function generateDates() {
   const container = document.getElementById("dateContainer");
-  const monthHeader = document.getElementById("calendarMonth");
   container.innerHTML = "";
 
   const today = new Date();
-  monthHeader.textContent = today.toLocaleDateString("nl-NL", { month: "long", year: "numeric" });
+  today.setHours(0, 0, 0, 0);
+  const last = new Date(today);
+  last.setDate(today.getDate() + DAYS_SHOWN - 1);
 
-  let dayOfWeek = today.getDay();
-  let offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const fmtMonth = (d) => d.toLocaleDateString("nl-NL", { month: "long" });
+  document.getElementById("calendarMonth").textContent =
+    today.getMonth() === last.getMonth()
+      ? `${fmtMonth(today)} ${today.getFullYear()}`
+      : `${fmtMonth(today)} – ${fmtMonth(last)} ${last.getFullYear()}`;
 
-  for (let i = 0; i < offset; i++) {
-    container.appendChild(document.createElement("div"));
-  }
+  const offset = today.getDay() === 0 ? 6 : today.getDay() - 1;
+  for (let i = 0; i < offset; i++) container.appendChild(document.createElement("div"));
 
-  let firstWeekdaySet = false;
-
-  for (let i = 0; i < 14; i++) {
-    const dateObj = new Date(today);
-    dateObj.setDate(today.getDate() + i);
-
-    const day = dateObj.getDay();
-    const isWeekend = day === 0 || day === 6;
-
-    const d = dateObj.getDate();
-    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
-    const y = dateObj.getFullYear();
-    const fullDate = `${y}-${m}-${String(d).padStart(2, "0")}`;
-
-    const div = document.createElement("div");
-    div.setAttribute("data-date", fullDate);
-    div.setAttribute("data-weekend", isWeekend);
-
-    if (isWeekend) {
-      div.className =
-        "date-btn text-neutral-700 cursor-not-allowed flex items-center justify-center opacity-30 py-2";
-      div.textContent = d;
-    } else if (!firstWeekdaySet) {
-      div.className = "date-btn flex justify-center items-center active-date cursor-pointer py-2";
-      div.innerHTML = `<div class="date-circle w-8 h-8 rounded-full bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white flex items-center justify-center font-bold">${d}</div>`;
-      state.date = fullDate;
-      firstWeekdaySet = true;
-    } else {
-      div.className = "date-btn cursor-pointer hover:text-accent flex items-center justify-center py-2";
-      div.textContent = d;
-    }
-    container.appendChild(div);
-  }
-
-  attachDateListeners();
-}
-
-function generateTimeSlots() {
-  const container = document.getElementById("timeContainer");
-  container.innerHTML = "";
-
-  let currentMin = 11 * 60;
-  const endMin = 19 * 60;
-  const interval = 35;
-
-  while (currentMin + interval <= endMin) {
-    const h = Math.floor(currentMin / 60).toString().padStart(2, "0");
-    const m = (currentMin % 60).toString().padStart(2, "0");
-    const timeStr = `${h}:${m}`;
+  let firstSelectable = null;
+  for (let i = 0; i < DAYS_SHOWN; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    const dateStr = toDateStr(date);
+    // A weekday whose every slot is already over (e.g. today after closing) can't be picked either.
+    const hasTimeLeft = allSlotTimes().some((t) => !isPastSlot(dateStr, t));
+    const selectable = !isWeekend(date) && hasTimeLeft;
 
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className =
-      "time-btn py-3 rounded-xl border border-neutral-800 text-xs font-medium hover:border-accent/50 transition text-neutral-400 bg-cardbg";
-    btn.setAttribute("data-time", timeStr);
-    btn.textContent = timeStr;
-    container.appendChild(btn);
-
-    currentMin += interval;
-  }
-
-  attachTimeListeners();
-}
-
-function attachDateListeners() {
-  const dateBtns = document.querySelectorAll(".date-btn");
-  dateBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.getAttribute("data-weekend") === "true") return;
-
-      dateBtns.forEach((d) => {
-        d.classList.remove("active-date");
-        const circle = d.querySelector(".date-circle");
-        if (circle) {
-          d.textContent = circle.textContent.trim();
-          if (d.getAttribute("data-weekend") !== "true") {
-            d.classList.add("hover:text-accent", "cursor-pointer");
-          }
-        }
-      });
-
-      const dateText = btn.textContent.trim();
-      btn.innerHTML = `<div class="date-circle w-8 h-8 rounded-full bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white flex items-center justify-center font-bold">${dateText}</div>`;
-      btn.classList.add("active-date");
-      btn.classList.remove("hover:text-accent", "cursor-pointer");
-
-      state.date = btn.getAttribute("data-date");
-      state.time = null;
-      updateSubmitState();
-      checkAvailableTimes(state.date);
-    });
-  });
-}
-
-function attachTimeListeners() {
-  const timeBtns = document.querySelectorAll(".time-btn");
-  timeBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.disabled) return;
-
-      timeBtns.forEach((t) => {
-        if (t.disabled) return;
-        t.classList.remove(
-          "bg-gradient-to-b", "from-accent-light", "via-accent", "to-accent-dark",
-          "text-white", "font-bold", "active-time",
-        );
-        t.classList.add("border", "border-neutral-800", "text-neutral-400", "bg-cardbg");
-      });
-
-      btn.classList.remove("border", "border-neutral-800", "text-neutral-400", "bg-cardbg");
-      btn.classList.add(
-        "bg-gradient-to-b", "from-accent-light", "via-accent", "to-accent-dark",
-        "text-white", "font-bold", "active-time",
-      );
-
-      state.time = btn.getAttribute("data-time");
-      updateSubmitState();
-    });
-  });
-}
-
-// Matches APPOINTMENT_DURATION_MINUTES in primecuts-backend/src/utils/timeOverlap.js.
-const APPOINTMENT_DURATION_MINUTES = 35;
-
-function timeToMinutes(hhmm) {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function overlapsBlockedRange(time, blockedRanges) {
-  const start = timeToMinutes(time);
-  const end = start + APPOINTMENT_DURATION_MINUTES;
-  return blockedRanges.some((range) => {
-    const blockStart = timeToMinutes(range.startTime);
-    const blockEnd = timeToMinutes(range.endTime);
-    return start < blockEnd && end > blockStart;
-  });
-}
-
-async function checkAvailableTimes(selectedDate) {
-  const container = document.getElementById("timeContainer");
-
-  const [y, m, d] = selectedDate.split("-").map(Number);
-  const dateObj = new Date(y, m - 1, d);
-  const day = dateObj.getDay();
-
-  if (day === 0 || day === 6) {
-    container.innerHTML = `<div class="col-span-full text-center py-8 text-neutral-500 font-medium text-xs">Gesloten in het weekend. Kies een weekdag.</div>`;
-    return;
-  } else if (container.children.length === 0 || container.querySelector(".col-span-full")) {
-    generateTimeSlots();
-  }
-
-  const timeBtns = document.querySelectorAll(".time-btn");
-  timeBtns.forEach((btn) => {
-    btn.disabled = false;
-    btn.classList.remove(
-      "line-through", "text-neutral-700", "cursor-not-allowed", "opacity-50",
-      "border-transparent", "bg-neutral-900",
+    btn.dataset.date = dateStr;
+    btn.textContent = date.getDate();
+    btn.setAttribute(
+      "aria-label",
+      date.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" }),
     );
-    btn.classList.add("bg-cardbg");
-    if (btn.getAttribute("data-time") !== state.time) {
-      btn.classList.add("border-neutral-800", "text-neutral-400");
+    btn.className =
+      "date-btn pressable h-10 rounded-full text-sm font-medium flex items-center justify-center mx-auto w-10";
+    if (!selectable) {
+      btn.disabled = true;
+      btn.classList.add("text-neutral-700", "cursor-not-allowed");
+    } else {
+      btn.classList.add("text-neutral-300", "hover:bg-neutral-800");
+      btn.addEventListener("click", () => selectDate(dateStr));
+      if (!firstSelectable) firstSelectable = dateStr;
     }
+    container.appendChild(btn);
+  }
+
+  if (firstSelectable) selectDate(firstSelectable);
+}
+
+function selectDate(dateStr) {
+  state.date = dateStr;
+  state.time = null;
+  state.preview = null;
+  document.querySelectorAll(".date-btn").forEach((btn) => {
+    const isSelected = btn.dataset.date === dateStr;
+    btn.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    btn.classList.toggle("bg-gradient-to-b", isSelected);
+    btn.classList.toggle("from-accent-light", isSelected);
+    btn.classList.toggle("via-accent", isSelected);
+    btn.classList.toggle("to-accent-dark", isSelected);
+    btn.classList.toggle("text-white", isSelected);
+    btn.classList.toggle("font-bold", isSelected);
   });
+  loadTimes(dateStr);
+  render();
+}
+
+// Every slot starts disabled until availability for this date has actually loaded — otherwise a
+// quick tap could pick a time that turns out to be taken a moment later.
+async function loadTimes(dateStr) {
+  const requestId = ++timesRequestId;
+  const container = document.getElementById("timeContainer");
+  const status = document.getElementById("timeStatus");
+  status.textContent = "Beschikbare tijden laden…";
+  container.innerHTML = "";
+
+  // Slots that already started today aren't shown at all — striking them through would read as
+  // "taken", which they're not.
+  const times = allSlotTimes().filter((time) => !isPastSlot(dateStr, time));
+  times.forEach((time) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.dataset.time = time;
+    btn.textContent = time;
+    btn.disabled = true;
+    btn.setAttribute("aria-pressed", "false");
+    btn.className =
+      "slot pressable is-loading py-3 rounded-xl border border-neutral-800 bg-cardbg text-sm text-neutral-300 hover:border-accent/60";
+    btn.addEventListener("click", () => selectTime(time));
+    container.appendChild(btn);
+  });
+
+  let taken = new Set();
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/appointments?date=${dateStr}`);
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error();
+    if (requestId !== timesRequestId) return;
+    const blockedRanges = result.blockedRanges || [];
+    taken = new Set(result.data.map((a) => a.time));
+    times.forEach((time) => {
+      const start = timeToMinutes(time);
+      const end = start + APPOINTMENT_DURATION_MINUTES;
+      const blocked = blockedRanges.some(
+        (r) => start < timeToMinutes(r.endTime) && end > timeToMinutes(r.startTime),
+      );
+      if (blocked) taken.add(time);
+    });
+  } catch (error) {
+    if (requestId !== timesRequestId) return;
+    status.textContent = "Tijden konden niet geladen worden. Kies de dag opnieuw om het nog eens te proberen.";
+    return;
+  }
+
+  let openCount = 0;
+  container.querySelectorAll(".slot").forEach((btn) => {
+    btn.classList.remove("is-loading");
+    const unavailable = taken.has(btn.dataset.time);
+    btn.disabled = unavailable;
+    if (unavailable) btn.setAttribute("aria-label", `${btn.dataset.time} — bezet`);
+    else openCount++;
+  });
+
+  status.textContent = !openCount
+    ? "Deze dag is helemaal vol. Kies een andere dag."
+    : openCount < times.length
+    ? "Doorgestreepte tijden zijn al bezet."
+    : "";
+
+  if (state.time && taken.has(state.time)) {
+    state.time = null;
+    state.preview = null;
+    render();
+  }
+}
+
+function selectTime(time) {
+  state.time = time;
+  document.querySelectorAll(".slot").forEach((btn) => {
+    btn.setAttribute("aria-pressed", btn.dataset.time === time ? "true" : "false");
+  });
+  refreshPreview();
+  render();
+}
+
+// ---------------------------------------------------------------- PREVIEW (next dates + clashes)
+async function refreshPreview() {
+  const requestId = ++previewRequestId;
+  state.preview = null;
+  if (!state.plan || !state.date || !state.time) {
+    state.previewLoading = false;
+    return;
+  }
+  state.previewLoading = true;
+  render();
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/appointments?date=${selectedDate}`);
+    const params = new URLSearchParams({ date: state.date, time: state.time, frequency: state.plan });
+    const response = await fetch(`${API_BASE_URL}/api/appointments/subscriptions/preview?${params}`);
     const result = await response.json();
-
-    if (result.success) {
-      const bookedTimes = result.data.map((app) => app.time);
-      const blockedRanges = result.blockedRanges || [];
-
-      timeBtns.forEach((btn) => {
-        const btnTime = btn.getAttribute("data-time");
-        const isBooked = bookedTimes.includes(btnTime);
-        const isBlocked = overlapsBlockedRange(btnTime, blockedRanges);
-        if (isBooked || isBlocked) {
-          btn.disabled = true;
-          btn.classList.remove(
-            "hover:border-accent/50", "bg-gradient-to-b", "from-accent-light", "via-accent",
-            "to-accent-dark", "text-white", "font-bold", "active-time",
-            "border-neutral-800", "text-neutral-400", "bg-cardbg",
-          );
-          btn.classList.add(
-            "line-through", "text-neutral-700", "cursor-not-allowed", "opacity-50",
-            "border-transparent", "bg-neutral-900",
-          );
-
-          if (state.time === btnTime) {
-            state.time = null;
-            updateSubmitState();
-          }
-        }
-      });
-    }
+    if (requestId !== previewRequestId) return;
+    state.preview = response.ok && result.success ? result.data : { error: result.error || "Kon niet controleren." };
   } catch (error) {
-    console.error("Error fetching times:", error);
+    if (requestId !== previewRequestId) return;
+    state.preview = { error: "Kon niet controleren of deze plek elke keer vrij is. Probeer het opnieuw." };
   }
+  state.previewLoading = false;
+  render();
 }
 
-// --- FORM ---
-const subscriptionForm = document.getElementById("subscriptionForm");
+// ---------------------------------------------------------------- STEP 3: DETAILS
+const fields = {
+  name: document.getElementById("customerName"),
+  email: document.getElementById("customerEmail"),
+  phone: document.getElementById("customerPhone"),
+};
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Common typos that would silently send the confirmation into the void.
+const EMAIL_DOMAIN_FIXES = {
+  "gmial.com": "gmail.com", "gmal.com": "gmail.com", "gmai.com": "gmail.com", "gamil.com": "gmail.com",
+  "gmail.co": "gmail.com", "gmail.nl": "gmail.com", "gmail.con": "gmail.com",
+  "hotmial.com": "hotmail.com", "hotmal.com": "hotmail.com", "hotmai.com": "hotmail.com", "hotmail.con": "hotmail.com",
+  "hotmial.nl": "hotmail.nl", "hotmal.nl": "hotmail.nl",
+  "outlok.com": "outlook.com", "outloo.com": "outlook.com", "outlook.con": "outlook.com",
+  "icloud.co": "icloud.com", "iclod.com": "icloud.com", "live.nll": "live.nl",
+};
+
+const validators = {
+  name: (v) => (v.trim().length >= 2 ? null : "Vul je volledige naam in."),
+  email: (v) => (EMAIL_REGEX.test(v.trim()) ? null : "Vul een geldig e-mailadres in, bijv. naam@gmail.com."),
+  phone: (v) => {
+    const digits = v.replace(/\D/g, "");
+    if (!/^[0-9+\-\s()]*$/.test(v.trim())) return "Gebruik alleen cijfers, spaties en +.";
+    return digits.length >= 9 && digits.length <= 15 ? null : "Vul een geldig telefoonnummer in, bijv. 06 12345678.";
+  },
+};
+
+// Errors appear once a field has been left (or on submit) — not while someone is still typing.
+const touched = { name: false, email: false, phone: false };
+
+function showFieldError(key) {
+  const input = fields[key];
+  const errorEl = document.getElementById(`${input.id}Error`);
+  const error = validators[key](input.value);
+  const visible = touched[key] && error;
+  input.setAttribute("aria-invalid", visible ? "true" : "false");
+  errorEl.textContent = visible ? error : "";
+  errorEl.classList.toggle("hidden", !visible);
+}
+
+function updateEmailHint() {
+  const hint = document.getElementById("customerEmailHint");
+  const value = fields.email.value.trim().toLowerCase();
+  const domain = value.split("@")[1];
+  const fix = domain && EMAIL_DOMAIN_FIXES[domain];
+  if (!fix) {
+    hint.classList.add("hidden");
+    return;
+  }
+  const suggestion = `${value.split("@")[0]}@${fix}`;
+  hint.innerHTML = "";
+  hint.append("Bedoel je ");
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "underline font-semibold";
+  btn.textContent = suggestion;
+  btn.addEventListener("click", () => {
+    fields.email.value = suggestion;
+    hint.classList.add("hidden");
+    showFieldError("email");
+    render();
+  });
+  hint.append(btn, "?");
+  hint.classList.remove("hidden");
+}
+
+Object.entries(fields).forEach(([key, input]) => {
+  input.addEventListener("blur", () => {
+    touched[key] = true;
+    showFieldError(key);
+    if (key === "email") updateEmailHint();
+  });
+  input.addEventListener("input", () => {
+    if (touched[key]) showFieldError(key);
+    if (key === "email") updateEmailHint();
+    render();
+  });
+});
+
+// ---------------------------------------------------------------- SUMMARY + SUBMIT
 const confirmBtn = document.getElementById("confirmBtn");
 const errorMessage = document.getElementById("errorMessage");
 
-function updateSubmitState() {
-  confirmBtn.disabled = !state.date || !state.time;
+const consentCheckbox = document.getElementById("consentCheckbox");
+consentCheckbox.addEventListener("change", render);
+
+// "november"
+const monthName = (dateStr) => parseDateStr(dateStr).toLocaleDateString("nl-NL", { month: "long" });
+// "1 december"
+const dayMonth = (dateStr) => parseDateStr(dateStr).toLocaleDateString("nl-NL", { day: "numeric", month: "long" });
+
+function missingItems() {
+  const missing = [];
+  if (!state.plan) missing.push("plan");
+  if (!state.date || !state.time) missing.push("tijd");
+  if (validators.name(fields.name.value)) missing.push("naam");
+  if (validators.email(fields.email.value)) missing.push("e-mail");
+  if (validators.phone(fields.phone.value)) missing.push("telefoonnummer");
+  if (!consentCheckbox.checked) missing.push("toestemming");
+  return missing;
 }
 
-subscriptionForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  errorMessage.classList.add("hidden");
+function render() {
+  const plan = plans.find((p) => p.id === state.plan);
+  const preview = state.preview;
 
-  if (!state.date || !state.time) {
-    errorMessage.textContent = "Kies eerst een datum en tijd.";
-    errorMessage.classList.remove("hidden");
-    return;
+  document.getElementById("summaryPlan").textContent = plan ? plan.label : "—";
+  document.getElementById("summarySchedule").textContent = scheduleText(state.plan, state.date, state.time) || "Kies een dag en tijd";
+  document.getElementById("summaryMonthly").innerHTML = plan ? `&euro;${formatEuro(plan.monthlyPrice)}` : "—";
+
+  // What's charged now depends on the visits left in the first month — only known once the preview
+  // for the chosen day is in.
+  if (preview?.firstMonthAmount !== undefined && state.date) {
+    const month = monthName(state.date);
+    document.getElementById("summaryPayNowLabel").textContent = `Nu betalen (${month})`;
+    document.getElementById("summaryPayNow").innerHTML = `&euro;${formatEuro(preview.firstMonthAmount)}`;
+    const visits = preview.visitsInFirstMonth;
+    document.getElementById("summaryAfter").textContent =
+      `Voor je ${visits === 1 ? "afspraak" : `${visits} afspraken`} in ${month}. Vanaf ${dayMonth(preview.nextChargeDate)} wordt elke 1e van de maand automatisch €${formatEuro(preview.monthlyPrice)} van je kaart afgeschreven.`;
+  } else {
+    document.getElementById("summaryPayNowLabel").textContent = "Nu betalen";
+    document.getElementById("summaryPayNow").innerHTML = "—";
+    document.getElementById("summaryAfter").textContent = plan
+      ? `Elke 1e van de maand wordt automatisch €${formatEuro(plan.monthlyPrice)} van je kaart afgeschreven.`
+      : "";
+  }
+  document.getElementById("consentText").textContent = plan
+    ? `Ik geef PrimeCuts toestemming om elke 1e van de maand automatisch €${formatEuro(plan.monthlyPrice)} van mijn kaart af te schrijven, tot ik opzeg.`
+    : "Ik geef PrimeCuts toestemming om elke 1e van de maand automatisch het maandbedrag van mijn kaart af te schrijven, tot ik opzeg.";
+
+  const upcomingWrap = document.getElementById("summaryUpcomingWrap");
+  const upcomingList = document.getElementById("summaryUpcoming");
+  const conflictBox = document.getElementById("summaryConflict");
+
+  if (state.previewLoading) {
+    upcomingWrap.classList.remove("hidden");
+    upcomingList.innerHTML = `<li class="text-neutral-500">Controleren of deze plek elke keer vrij is…</li>`;
+    conflictBox.classList.add("hidden");
+  } else if (preview?.upcoming) {
+    upcomingWrap.classList.remove("hidden");
+    upcomingList.innerHTML = preview.upcoming
+      .map((date) => `<li class="flex justify-between"><span class="capitalize">${shortDate(date)}</span><span class="text-neutral-500">${state.time}</span></li>`)
+      .join("");
+    if (preview.conflictDate) {
+      conflictBox.textContent = `Deze plek is niet elke keer vrij: op ${shortDate(preview.conflictDate)} om ${state.time} is hij al bezet. Kies een andere tijd of dag.`;
+      conflictBox.classList.remove("hidden");
+    } else {
+      conflictBox.classList.add("hidden");
+    }
+  } else if (preview?.error) {
+    upcomingWrap.classList.add("hidden");
+    conflictBox.textContent = preview.error;
+    conflictBox.classList.remove("hidden");
+  } else {
+    upcomingWrap.classList.add("hidden");
+    conflictBox.classList.add("hidden");
   }
 
-  confirmBtn.disabled = true;
-  confirmBtn.textContent = "Bezig...";
+  const missing = missingItems();
+  const previewOk = preview?.upcoming && !preview.conflictDate;
+  confirmBtn.disabled = state.submitting || missing.length > 0 || !previewOk;
+  confirmBtn.textContent = state.submitting ? "Even geduld…" : "Verder naar betalen";
+
+  const hint = document.getElementById("missingHint");
+  if (missing.length) hint.textContent = `Nog nodig: ${missing.join(", ")}`;
+  else if (state.previewLoading) hint.textContent = "Even controleren…";
+  else if (preview?.conflictDate) hint.textContent = "Kies een tijd die elke keer vrij is.";
+  else hint.textContent = "";
+
+  const destination = document.getElementById("emailDestination");
+  const email = fields.email.value.trim();
+  const showDestination = !validators.email(email);
+  destination.textContent = showDestination ? `Bevestiging gaat naar ${email}` : "";
+  destination.classList.toggle("hidden", !showDestination);
+}
+
+document.getElementById("subscriptionForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (state.submitting) return;
+  errorMessage.classList.add("hidden");
+
+  // Surface every field problem at once and put the cursor on the first one.
+  Object.keys(fields).forEach((key) => {
+    touched[key] = true;
+    showFieldError(key);
+  });
+  const firstInvalid = Object.keys(fields).find((key) => validators[key](fields[key].value));
+  if (firstInvalid) {
+    fields[firstInvalid].focus();
+    render();
+    return;
+  }
+  if (!consentCheckbox.checked) {
+    consentCheckbox.focus();
+    render();
+    return;
+  }
+  if (confirmBtn.disabled) return;
+
+  state.submitting = true;
+  render();
 
   try {
     const response = await fetch(`${API_BASE_URL}/api/appointments/subscriptions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        customerName: document.getElementById("customerName").value,
-        customerEmail: document.getElementById("customerEmail").value,
-        customerPhone: document.getElementById("customerPhone").value,
+        customerName: fields.name.value.trim(),
+        customerEmail: fields.email.value.trim(),
+        customerPhone: fields.phone.value.trim(),
         date: state.date,
         time: state.time,
         frequency: state.plan,
+        agreedToMonthlyCharge: consentCheckbox.checked,
       }),
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Er is iets misgegaan");
-
-    if (data.paymentUrl) {
-      window.location.href = data.paymentUrl;
-      return;
+    if (!response.ok) {
+      // Someone else got there first (or a clash appeared) since the times were loaded — refresh so
+      // the customer isn't left picking from a stale list. Their own unfinished signup (409) keeps
+      // the selection, since that slot is theirs.
+      if (response.status !== 409) {
+        state.time = null;
+        state.preview = null;
+        loadTimes(state.date);
+      }
+      throw new Error(data.error || "Er is iets misgegaan. Probeer het opnieuw.");
     }
 
-    throw new Error("Geen betaallink ontvangen.");
+    openPayment(data);
   } catch (error) {
-    errorMessage.textContent = error.message;
+    errorMessage.textContent =
+      error instanceof TypeError ? "Geen verbinding. Controleer je internet en probeer het opnieuw." : error.message;
     errorMessage.classList.remove("hidden");
-    confirmBtn.disabled = false;
-    confirmBtn.textContent = "Abonneren";
+    state.submitting = false;
+    render();
   }
 });
 
-// --- PAYMENT RETURN (SumUp redirects back here after the first month's checkout) ---
-const successModal = document.getElementById("successModal");
-const successText = document.getElementById("successText");
-const goHomeBtn = document.getElementById("goHomeBtn");
+// ---------------------------------------------------------------- CARD PAYMENT (SumUp card form)
+// SumUp's own card form, embedded in a modal: card details go straight to SumUp, never through our
+// server. It handles 3D Secure itself. On success, the backend saves the card and charges the first
+// month (POST …/complete).
+const SUMUP_SDK_URL = "https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js";
+const paymentModal = document.getElementById("paymentModal");
+const paymentStatus = document.getElementById("paymentStatus");
+const paymentCancelBtn = document.getElementById("paymentCancelBtn");
+let activeSignup = null; // { subscriptionId, checkoutId, firstMonthAmount, monthlyPrice }
+let completing = false;
 
-goHomeBtn.addEventListener("click", () => {
-  window.location.href = "/";
-});
+function loadSumUpSdk() {
+  if (window.SumUpCard) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = SUMUP_SDK_URL;
+    script.onload = () => (window.SumUpCard ? resolve() : reject(new Error("SumUp niet geladen")));
+    script.onerror = () => reject(new Error("SumUp niet geladen"));
+    document.head.appendChild(script);
+  });
+}
 
-async function showPaymentReturnState() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const paymentState = urlParams.get("payment");
-  const appointmentId = urlParams.get("appointmentId");
-  const plan = urlParams.get("plan");
-
-  if (!appointmentId || paymentState !== "success") return;
+async function openPayment(signup) {
+  activeSignup = signup;
+  completing = false;
+  document.getElementById("paymentIntro").textContent =
+    `Je betaalt nu €${formatEuro(signup.firstMonthAmount)}. Je kaart wordt veilig bij SumUp opgeslagen voor de maandelijkse afschrijving van €${formatEuro(signup.monthlyPrice)}. SumUp controleert je kaart met €1, dat bedrag krijg je direct terug.`;
+  paymentStatus.textContent = "Betaalformulier laden…";
+  paymentStatus.className = "text-sm mt-4 text-neutral-400";
+  paymentCancelBtn.disabled = false;
+  document.getElementById("sumup-card").innerHTML = "";
+  paymentModal.classList.remove("hidden");
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/appointments/${appointmentId}`);
-    const data = await response.json();
-    if (!response.ok || !data.success) throw new Error(data.error || "Abonnement niet gevonden");
-
-    // This is a fresh page load after the SumUp redirect, so `state.plan` is back to its default —
-    // the actual plan the customer picked travels back via this URL param instead (see
-    // getPaymentRedirectUrl in appointmentController.js), not via in-memory state that just reset.
-    const recurrenceText = plan === "weekly" ? "elke week op deze dag" : "elke maand op deze dag";
-
-    if (data.data.status === "confirmed") {
-      successText.textContent = `Je vaste plek staat vast — ${recurrenceText} om ${data.data.time}.`;
-    } else {
-      // Not confirmed yet — ask the backend to verify with SumUp directly and release the hold
-      // immediately if payment actually failed, instead of waiting for the reconciliation sweep.
-      const cancelResponse = await fetch(`${API_BASE_URL}/api/appointments/cancel`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appointmentId }),
-      });
-      const cancelData = await cancelResponse.json();
-
-      if (cancelData.status === "confirmed") {
-        successText.textContent = `Je vaste plek staat vast — ${recurrenceText} om ${data.data.time}.`;
-      } else if (cancelData.status === "released" || cancelData.status === "collision") {
-        successText.textContent = "Betaling mislukt of geannuleerd. Je abonnement is niet bevestigd.";
-      } else {
-        successText.textContent = "Betaling wordt nog verwerkt. Je ontvangt een bevestiging per e-mail.";
-      }
-    }
-
-    successModal.classList.remove("hidden");
+    await loadSumUpSdk();
+    paymentStatus.textContent = "";
+    window.SumUpCard.mount({
+      id: "sumup-card",
+      checkoutId: signup.checkoutId,
+      locale: "nl-NL",
+      onResponse: (type, body) => {
+        if (type === "success") completeSignup();
+        else if (type === "fail" || type === "error") {
+          // The form stays usable — the customer can fix a typo or try another card right there.
+          paymentStatus.textContent = "Betaling niet gelukt. Controleer je kaartgegevens of probeer een andere kaart.";
+          paymentStatus.className = "text-sm mt-4 text-red-300";
+          console.error("SumUp card form:", type, body);
+        }
+      },
+    });
   } catch (error) {
-    console.error("Error resolving subscription payment:", error);
+    paymentStatus.textContent = "Het betaalformulier kon niet geladen worden. Controleer je internet en probeer het opnieuw.";
+    paymentStatus.className = "text-sm mt-4 text-red-300";
   }
 }
 
-// --- MOBILE MENU ---
+// Asks the backend to save the card and charge the first month. It can briefly report "pending"
+// while SumUp finalises the card check, so this polls for a little while before giving up — the
+// background sweep finishes it either way, so "processing" is an honest answer, not a failure.
+async function completeSignup() {
+  if (completing || !activeSignup) return;
+  completing = true;
+  paymentCancelBtn.disabled = true;
+  paymentStatus.textContent = "Betaling verwerken…";
+  paymentStatus.className = "text-sm mt-4 text-neutral-300";
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/appointments/subscriptions/${activeSignup.subscriptionId}/complete`, { method: "POST" });
+      const data = await response.json();
+      if (data.status === "active") return finishSignup("confirmed", data.data);
+      if (data.status === "failed") return finishSignup("failed", null, data.error);
+    } catch (error) {
+      // Network blip — keep trying.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  finishSignup("processing");
+}
+
+paymentCancelBtn.addEventListener("click", async () => {
+  if (!activeSignup || completing) return;
+  paymentCancelBtn.disabled = true;
+  paymentStatus.textContent = "Annuleren…";
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/appointments/subscriptions/${activeSignup.subscriptionId}/abandon`, { method: "POST" });
+    const data = await response.json();
+    // The card step had in fact just gone through — show the real outcome instead of "cancelled".
+    if (data.status === "active") return completeSignup();
+  } catch (error) {
+    // The seat frees itself after the signup timeout anyway.
+  }
+  paymentModal.classList.add("hidden");
+  activeSignup = null;
+  state.submitting = false;
+  loadTimes(state.date);
+  refreshPreview();
+  render();
+});
+
+function finishSignup(kind, details, error) {
+  paymentModal.classList.add("hidden");
+  if (kind === "confirmed") {
+    const card = details.cardLast4 ? `je kaart eindigend op ${details.cardLast4}` : "je kaart";
+    setReturnState(
+      "confirmed",
+      `Je vaste plek staat vast — ${RECURRENCE_TEXT[details.frequency] || "elke maand"} op ${weekdayName(details.startDate)} om ${details.time}. Je hebt €${formatEuro(details.firstMonthAmount)} betaald; vanaf ${dayMonth(details.nextChargeDate)} wordt elke maand €${formatEuro(details.monthlyPrice)} van ${card} afgeschreven. Je krijgt een bevestiging per e-mail.`,
+    );
+  } else if (kind === "failed") {
+    setReturnState("failed", error || "De betaling is niet gelukt, dus je abonnement is niet gestart.");
+  } else {
+    setReturnState("processing", "Je betaling wordt nog verwerkt. Je ontvangt een bevestiging per e-mail zodra alles rond is — je hoeft niets opnieuw te doen.");
+  }
+  activeSignup = null;
+  state.submitting = false;
+  successModal.classList.remove("hidden");
+  (retryBtn.classList.contains("hidden") ? document.getElementById("goHomeBtn") : retryBtn).focus();
+}
+
+// Pressing "back" restores this page from the browser cache — reset and refresh availability so
+// nothing stale is shown.
+window.addEventListener("pageshow", (event) => {
+  if (!event.persisted) return;
+  state.submitting = false;
+  if (state.date) loadTimes(state.date);
+  refreshPreview();
+  render();
+});
+
+// ---------------------------------------------------------------- RESULT
+const successModal = document.getElementById("successModal");
+const successText = document.getElementById("successText");
+const successTitle = document.getElementById("successTitle");
+const successIcon = document.getElementById("successIcon");
+const retryBtn = document.getElementById("retryBtn");
+
+document.getElementById("goHomeBtn").addEventListener("click", () => {
+  window.location.href = "/";
+});
+retryBtn.addEventListener("click", () => {
+  successModal.classList.add("hidden");
+  history.replaceState(null, "", window.location.pathname + (state.plan ? `?plan=${state.plan}` : ""));
+  if (state.date) loadTimes(state.date);
+  refreshPreview();
+  render();
+});
+
+function setReturnState(kind, text) {
+  const looks = {
+    confirmed: { title: "Abonnement Gestart!", icon: "fa-check", color: "bg-green-500/20 text-green-400" },
+    failed: { title: "Betaling Mislukt", icon: "fa-xmark", color: "bg-red-500/20 text-red-400" },
+    processing: { title: "Betaling Wordt Verwerkt", icon: "fa-clock", color: "bg-yellow-500/20 text-yellow-400" },
+  };
+  const look = looks[kind];
+  successTitle.textContent = look.title;
+  successIcon.className = `w-20 h-20 rounded-full ${look.color} flex items-center justify-center mx-auto mb-6`;
+  successIcon.innerHTML = `<i class="fa-solid ${look.icon} text-4xl"></i>`;
+  successText.textContent = text;
+  retryBtn.classList.toggle("hidden", kind !== "failed");
+}
+
+// Coming back from the pay link in a "betaling mislukt" email (?billing=paid). The backend checks
+// that payment itself on its next run and emails a receipt — this just tells the customer so.
+function showBillingReturnState() {
+  if (new URLSearchParams(window.location.search).get("billing") !== "paid") return;
+  setReturnState("processing", "Bedankt! We verwerken je betaling en sturen je een bevestiging per e-mail. Je vaste plek blijft gewoon staan.");
+  successTitle.textContent = "Bedankt Voor Je Betaling";
+  successModal.classList.remove("hidden");
+  history.replaceState(null, "", window.location.pathname);
+}
+
+// ---------------------------------------------------------------- MOBILE MENU
 const hamburgerBtn = document.getElementById("hamburgerBtn");
 const mobileMenu = document.getElementById("mobileMenu");
 
@@ -381,11 +721,10 @@ mobileMenu.querySelectorAll("a").forEach((link) => {
   });
 });
 
-// --- INIT ---
+// ---------------------------------------------------------------- INIT
 window.addEventListener("DOMContentLoaded", () => {
+  loadPlans();
   generateDates();
-  generateTimeSlots();
-  updateSubmitState();
-  checkAvailableTimes(state.date);
-  showPaymentReturnState();
+  render();
+  showBillingReturnState();
 });

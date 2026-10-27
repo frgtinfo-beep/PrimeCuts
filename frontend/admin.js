@@ -486,20 +486,41 @@ async function deleteBlockedTime(blockedTimeId) {
 }
 
 function subscriptionCard(subscription) {
+  const badge = (classes, text) =>
+    `<span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg ${classes} text-xs font-semibold uppercase tracking-wide">${text}</span>`;
   const statusText =
     subscription.status === "pending"
-      ? `<span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-yellow-500/15 text-yellow-400 text-xs font-semibold uppercase tracking-wide">Wacht op betaling</span>`
-      : `<span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/15 text-green-400 text-xs font-semibold uppercase tracking-wide">Actief</span>`;
+      ? badge("bg-yellow-500/15 text-yellow-400", "Wacht op betaling")
+      : subscription.status === "paused"
+      ? badge("bg-neutral-500/15 text-neutral-300", "Gepauzeerd — niet betaald")
+      : subscription.billingStatus === "past_due"
+      ? badge("bg-red-500/15 text-red-400", "Betaling mislukt")
+      : badge("bg-green-500/15 text-green-400", "Actief");
   const cancelBtn = `<button type="button" data-cancel-subscription-id="${subscription._id}"
       class="cancel-subscription-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-900 text-red-400 hover:bg-red-900/20 transition text-xs font-semibold uppercase tracking-wide">
     <i class="fa-solid fa-xmark"></i> Opzeggen
   </button>`;
 
+  const weekday = subscription.startDate
+    ? new Date(`${subscription.startDate}T00:00:00`).toLocaleDateString("nl-NL", { weekday: "long" })
+    : "";
   const scheduleText =
     subscription.frequency === "weekly"
-      ? `Elke week — ${subscription.time}`
+      ? `Elke ${weekday} — ${subscription.time}`
+      : subscription.frequency === "biweekly"
+      ? `Om de week op ${weekday} — ${subscription.time}`
       : `Elke maand op de ${subscription.dayOfMonth}e — ${subscription.time}`;
-  const planText = subscription.frequency === "weekly" ? "4x per maand" : "1x per maand";
+  const planText =
+    subscription.frequency === "weekly" ? "wekelijks" : subscription.frequency === "biweekly" ? "elke 2 weken" : "1x per maand";
+  const startText = subscription.startDate ? ` &middot; sinds ${subscription.startDate}` : "";
+  const monthLabel = (period) =>
+    new Date(`${period}-01T12:00:00`).toLocaleDateString("nl-NL", { month: "long", year: "numeric" });
+  const billingText = [
+    subscription.paidThrough ? `betaald t/m ${monthLabel(subscription.paidThrough)}` : "",
+    subscription.cardLast4 ? `kaart •••• ${escapeHtml(subscription.cardLast4)}` : "",
+  ]
+    .filter(Boolean)
+    .join(" &middot; ");
 
   return `
     <div class="bg-cardbg border border-neutral-800 rounded-2xl p-6">
@@ -509,7 +530,8 @@ function subscriptionCard(subscription) {
             <i class="fa-solid fa-repeat text-accent"></i>
             <span class="font-bebas text-xl tracking-wide">${scheduleText}</span>
           </div>
-          <p class="text-neutral-400 text-sm">€${formatEuro(subscription.price)} / knipbeurt &middot; ${planText}</p>
+          <p class="text-neutral-400 text-sm">€${formatEuro(subscription.price)} / maand &middot; ${planText}${startText}</p>
+          ${billingText ? `<p class="text-neutral-500 text-xs mt-1">${billingText}</p>` : ""}
         </div>
         <div class="flex items-center gap-3">
           ${statusText}
@@ -566,7 +588,12 @@ async function fetchSubscriptions() {
 }
 
 async function cancelSubscription(subscriptionId) {
-  if (!confirm("Dit abonnement opzeggen? Toekomstige maanden worden niet meer aangemaakt.")) return;
+  if (
+    !confirm(
+      "Dit abonnement opzeggen? Er wordt niets meer afgeschreven en er worden geen nieuwe afspraken meer aangemaakt. Al betaalde afspraken blijven staan (annuleer die los als dat nodig is).",
+    )
+  )
+    return;
 
   try {
     const response = await fetch(`${API_BASE_URL}/api/admin/subscriptions/${subscriptionId}/cancel`, {
@@ -577,7 +604,13 @@ async function cancelSubscription(subscriptionId) {
       throw new Error(data.error || "Opzeggen mislukt.");
     }
     await fetchSubscriptions();
-    showToast("Abonnement opgezegd.", "success");
+    await fetchAppointments();
+    if (!data.emailSent) {
+      // The customer doesn't know yet — the barber has to tell them, or they'll show up anyway.
+      showToast("Abonnement opgezegd, maar de e-mail aan de klant kon niet verstuurd worden. Laat het de klant zelf even weten.", "error");
+    } else {
+      showToast("Abonnement opgezegd — er wordt niets meer afgeschreven. De klant heeft een e-mail gekregen.", "success");
+    }
   } catch (error) {
     showToast(error.message, "error");
   }

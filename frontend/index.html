@@ -192,10 +192,10 @@
         background: #e5342a;
         color: #fff;
         font-family: "JetBrains Mono", monospace;
-        font-size: 9px;
+        font-size: 11px;
         font-weight: 700;
-        letter-spacing: 0.12em;
-        padding: 4px 42px;
+        letter-spacing: 0.1em;
+        padding: 4px 36px;
         z-index: 10;
       }
 
@@ -818,7 +818,8 @@
     <!-- ========================
          2a. SUBSCRIPTION SECTION
     ======================== -->
-    <!-- <section class="relative py-24 px-6 md:px-12 bg-black overflow-hidden">
+    <!-- Hidden for now; still reachable directly at /subscription.html
+    <section class="relative py-24 px-6 md:px-12 bg-black overflow-hidden">
       <div class="relative z-10 max-w-5xl mx-auto">
         <div
           class="glass-service-card featured relative flex flex-col md:flex-row items-center justify-between gap-8 p-10 md:p-14 reveal"
@@ -828,35 +829,49 @@
               class="inline-flex items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.22em] uppercase text-accent"
             >
               <span class="w-5 h-0.5 bg-accent inline-block"></span
-              ><span>Vaste Plek</span>
+              ><span data-i18n="subscription.eyebrow">Vaste Plek</span>
             </span>
             <h2 class="chrome-text text-white font-bebas uppercase text-4xl md:text-5xl mt-4">
-              <span class="slant">Wil Je Een Vaste Plek?</span>
+              <span class="slant" data-i18n="subscription.title">Wil Je Een Vaste Plek?</span>
             </h2>
-            <p class="text-white/50 max-w-md mt-4 text-sm leading-relaxed">
-              Zelfde plek, zelfde tijd, elke maand — of elke week. Kies één keer
+            <p class="text-white/50 max-w-md mt-4 text-sm leading-relaxed" data-i18n="subscription.desc">
+              Zelfde plek, zelfde tijd — elke week, om de week of elke maand. Kies één keer
               je dag en tijd en die stoel is voortaan van jou.
             </p>
           </div>
 
           <div class="text-center shrink-0">
             <div class="mb-6">
-              <span class="text-white/40 text-xs font-mono uppercase tracking-widest">Vanaf</span>
+              <span class="text-white/40 text-xs font-mono uppercase tracking-widest" data-i18n="subscription.from">Vanaf</span>
               <span class="chrome-text font-bebas text-6xl block"
-                ><sup class="text-xl align-top">&euro;</sup>32<sup class="text-xl align-top">,50</sup></span
-              ><span class="block text-white/40 text-xs font-mono uppercase tracking-widest mt-1">per knipbeurt</span>
+                ><sup class="text-xl align-top">&euro;</sup><span id="subscriptionFromEuros">32</span><sup class="text-xl align-top">,<span id="subscriptionFromCents">50</span></sup></span
+              ><span class="block text-white/40 text-xs font-mono uppercase tracking-widest mt-1" data-i18n="subscription.perMonth">per maand</span>
             </div>
             <a
               href="subscription.html"
-              class="btn-corner inline-flex items-center gap-3 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white px-10 py-4 font-bold uppercase text-sm tracking-wide transition-all duration-300 hover:-translate-y-0.5"
+              class="btn-corner inline-flex items-center gap-3 bg-gradient-to-b from-accent-light via-accent to-accent-dark text-white px-10 py-4 font-bold uppercase text-sm tracking-wide transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-light"
             >
-              Abonneren
+              <span data-i18n="subscription.cta">Abonneren</span>
               <span class="text-xl">→</span>
             </a>
           </div>
         </div>
       </div>
-    </section> -->
+    </section>
+    <script>
+      // Keeps the "Vanaf" price in sync with primecuts-backend/src/config/subscriptionPlans.js.
+      fetch("/api/appointments/subscriptions/plans")
+        .then((response) => response.json())
+        .then((result) => {
+          if (!result.success || !result.data.length) return;
+          const cheapest = Math.min(...result.data.map((plan) => plan.monthlyPrice));
+          const [euros, cents] = cheapest.toFixed(2).split(".");
+          document.getElementById("subscriptionFromEuros").textContent = euros;
+          document.getElementById("subscriptionFromCents").textContent = cents;
+        })
+        .catch(() => {});
+    </script>
+    -->
 
     <!-- ========================
          2b. POLICY SECTION
@@ -990,7 +1005,7 @@
               Skin Fade
             </h3>
             <p
-              class="font-mono text-[10px] uppercase tracking-widest text-accent mt-1"
+              class="font-mono text-[11px] uppercase tracking-widest text-accent mt-1"
               data-i18n="gallery.item1.sub"
             >
               Precisie taper
@@ -1032,7 +1047,7 @@
               Getextureerde Crop
             </h3>
             <p
-              class="font-mono text-[10px] uppercase tracking-widest text-accent mt-1"
+              class="font-mono text-[11px] uppercase tracking-widest text-accent mt-1"
               data-i18n="gallery.item2.sub"
             >
               Natuurlijke afwerking
@@ -1074,7 +1089,7 @@
               Lijnwerk
             </h3>
             <p
-              class="font-mono text-[10px] uppercase tracking-widest text-accent mt-1"
+              class="font-mono text-[11px] uppercase tracking-widest text-accent mt-1"
               data-i18n="gallery.item3.sub"
             >
               Scherpe contour
@@ -1116,7 +1131,7 @@
               Baard Sculpting
             </h3>
             <p
-              class="font-mono text-[10px] uppercase tracking-widest text-accent mt-1"
+              class="font-mono text-[11px] uppercase tracking-widest text-accent mt-1"
               data-i18n="gallery.item4.sub"
             >
               Volledige detaillering
@@ -1368,14 +1383,15 @@
               rel="noopener noreferrer"
               class="flex items-center gap-2 text-white/50 hover:text-accent transition font-mono text-sm"
             >
-              <img
-                src="./image/branch-logo.png"
-                alt="Branch Logo"
-                class="h-4 w-auto"
-              />
-              <span data-i18n="footer.poweredBy"
-                >Mogelijk gemaakt door Branch</span
-              >
+              <span data-i18n="footer.poweredBy">Aangedreven door</span>
+              <span class="flex items-center gap-1.5">
+                <img
+                  src="./image/branch-logo.png"
+                  alt="Branch Logo"
+                  class="h-4 w-auto"
+                />
+                <span>Branch</span>
+              </span>
             </a>
           </div>
         </div>
@@ -1504,6 +1520,13 @@
           "hero.stat3Label": "voor Contouren",
           "services.eyebrow": "Tarieven — Prijzen",
           "services.title": "Onze Diensten",
+          "subscription.eyebrow": "Vaste Plek",
+          "subscription.title": "Wil Je Een Vaste Plek?",
+          "subscription.desc":
+            "Zelfde plek, zelfde tijd — elke week, om de week of elke maand. Kies één keer je dag en tijd en die stoel is voortaan van jou.",
+          "subscription.from": "Vanaf",
+          "subscription.perMonth": "per maand",
+          "subscription.cta": "Abonneren",
           "services.subtitle":
             "Elke kaart hieronder is een plek in de stoel bij onze kapper in Lelystad — kies je nummer, neem je plaats.",
           "services.ribbon": "MEEST GEBOEKT",
@@ -1542,7 +1565,7 @@
           "footer.closed": "Gesloten",
           "footer.copyright":
             "&copy; 2026 PrimeCuts. Alle rechten voorbehouden aan Branch.",
-          "footer.poweredBy": "Mogelijk gemaakt door Branch",
+          "footer.poweredBy": "Aangedreven door",
           "footer.barberLogin": "Barber Login",
         },
         en: {
@@ -1562,6 +1585,13 @@
           "hero.stat3Label": "for Contouren",
           "services.eyebrow": "Rates — Pricing",
           "services.title": "Our Services",
+          "subscription.eyebrow": "Fixed Spot",
+          "subscription.title": "Want A Fixed Spot?",
+          "subscription.desc":
+            "Same seat, same time — every week, every other week or every month. Pick your day and time once and that chair is yours.",
+          "subscription.from": "From",
+          "subscription.perMonth": "per month",
+          "subscription.cta": "Subscribe",
           "services.subtitle":
             "Every card below is a seat in the chair — pick your number, take your place.",
           "services.ribbon": "MOST BOOKED",
@@ -1600,7 +1630,7 @@
           "footer.closed": "Closed",
           "footer.copyright":
             "&copy; 2026 PrimeCuts. All rights reserved to Branch.",
-          "footer.poweredBy": "Powered by Branch",
+          "footer.poweredBy": "Powered by",
           "footer.barberLogin": "Barber Login",
         },
       };

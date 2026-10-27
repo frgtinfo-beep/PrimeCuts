@@ -2,11 +2,14 @@ const bcrypt = require("bcryptjs");
 const Appointment = require("../models/Appointment");
 const BlockedTime = require("../models/BlockedTime");
 const Subscription = require("../models/Subscription");
-const { sendCancellationEmail } = require("../services/cancellationEmail");
+const { sendCancellationEmail, sendSubscriptionCancelledEmail } = require("../services/cancellationEmail");
 const { sendRescheduleEmail } = require("../services/rescheduleEmail");
 const { scheduleBranchCancellation } = require("../services/branchReporter");
 const { refundAppointment } = require("../services/refundService");
 const { overlapsBlockedRange } = require("../utils/timeOverlap");
+const { isReservedBySubscription } = require("../services/subscriptionSchedule");
+const { shopNow } = require("../utils/shopTime");
+const { stopBilling } = require("../services/subscriptionBilling");
 
 const login = async (req, res) => {
   try {
@@ -134,12 +137,21 @@ const rescheduleAppointmentByAdmin = async (req, res) => {
       return res.status(400).json({ error: "Dit tijdslot is geblokkeerd." });
     }
 
+    // Another subscriber's future seat (not generated as an appointment yet) — moving someone onto it
+    // would make that subscriber's renewal fail later. A subscriber's own seat is fine.
+    if (await isReservedBySubscription(date, time, { excludeSubscriptionId: appointment.subscriptionId })) {
+      return res.status(400).json({ error: "Dit tijdslot is gereserveerd voor een vaste klant (abonnement)." });
+    }
+
     const oldDate = appointment.date;
     const oldTime = appointment.time;
 
     const attemptMove = async () => {
       appointment.date = date;
       appointment.time = time;
+      // Any reminder already sent was for the old moment — let the new one get its own.
+      appointment.reminderSentAt = undefined;
+      appointment.reminderAttempts = 0;
       await appointment.save();
     };
 
@@ -261,7 +273,7 @@ const deleteBlockedTime = async (req, res) => {
 // first payment, not just ones that already went through.
 const listSubscriptions = async (req, res) => {
   try {
-    const subscriptions = await Subscription.find({ status: { $in: ["pending", "active"] } }).sort({
+    const subscriptions = await Subscription.find({ status: { $in: ["pending", "active", "paused"] } }).sort({
       dayOfMonth: 1,
       time: 1,
     });
@@ -272,20 +284,37 @@ const listSubscriptions = async (req, res) => {
   }
 };
 
-// Stops future renewals only — never retroactively touches appointments already generated for
-// this membership (those get cancelled individually, same as any other appointment, if needed).
+// Stops all future charges (the saved card is removed at SumUp) and visits. Visits already generated
+// are in a month the customer already paid for, so they're kept and listed in the email — cancel one
+// individually if needed. No automatic refund for the rest of the paid month.
 const cancelSubscriptionByAdmin = async (req, res) => {
   try {
     const subscription = await Subscription.findById(req.params.subscriptionId);
     if (!subscription) {
       return res.status(404).json({ error: "Abonnement niet gevonden." });
     }
+    if (subscription.status === "cancelled") {
+      return res.status(400).json({ error: "Dit abonnement is al opgezegd." });
+    }
 
     subscription.status = "cancelled";
     subscription.cancelledAt = new Date();
+    subscription.renewalIssue = undefined;
+    subscription.renewalIssueDate = undefined;
+    subscription.renewalIssueAt = undefined;
     await subscription.save();
 
-    res.json({ success: true });
+    await stopBilling(subscription);
+
+    const kept = await Appointment.find({
+      subscriptionId: subscription._id,
+      status: "confirmed",
+      date: { $gte: shopNow().date },
+    }).sort({ date: 1 });
+
+    const emailSent = await sendSubscriptionCancelledEmail(subscription, [], kept);
+
+    res.json({ success: true, keptAppointments: kept.length, emailSent });
   } catch (error) {
     console.error("Admin cancel subscription error:", error);
     res.status(500).json({ error: "Opzeggen mislukt." });

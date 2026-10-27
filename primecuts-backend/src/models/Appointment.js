@@ -34,6 +34,10 @@ const appointmentSchema = new mongoose.Schema({
   releasedAt: { type: Date },
   // Set when this appointment is one occurrence of a recurring membership (see models/Subscription).
   subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: "Subscription" },
+  // Which scheduled occurrence (YYYY-MM-DD, as computed from the subscription's startDate) this
+  // visit is. Stays put when an admin reschedules the visit to another day, so the renewal sweep
+  // never regenerates an occurrence that was only moved.
+  subscriptionOccurrenceDate: { type: String },
   // No longer a Mongo TTL field (see the dropped expiresAt_1 index) — a blind time-based delete
   // here previously raced a real payment: it could destroy a "pending" appointment that SumUp had
   // actually just marked PAID, if the webhook/redirect that would've flipped it to "confirmed"
@@ -41,6 +45,17 @@ const appointmentSchema = new mongoose.Schema({
   // creation-time reference.
   expiresAt: { type: Date, default: Date.now },
   cancelledAt: { type: Date },
+
+  // Confirmation email delivery: "pending" until it actually went out, so a failed send gets retried
+  // (retryPendingConfirmationEmails in appointmentController.js) instead of silently lost.
+  confirmationEmailStatus: { type: String, enum: ["pending", "sent"] },
+  confirmationEmailAttempts: { type: Number, default: 0 },
+  confirmationEmailLastAttemptAt: { type: Date },
+
+  // Day-before reminder email (services/reminderEmail.js). Cleared when an admin reschedules, so the
+  // new date gets its own reminder.
+  reminderSentAt: { type: Date },
+  reminderAttempts: { type: Number, default: 0 },
 
   // Set when an admin cancels a booking — whether the SumUp refund actually went through.
   refundStatus: { type: String, enum: ["refunded", "failed", "skipped"] },

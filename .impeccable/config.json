@@ -1,0 +1,32 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "createdAt": "2026-10-27T16:24:24.002Z",
+        "reason": "Claude triage: HTML emails need an email-safe system font stack; the existing confirmation/cancellation/reschedule emails already use Arial,Helvetica,sans-serif and web fonts don't load in most mail clients"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "frontend/index.html"
+        ],
+        "createdAt": "2026-10-27T22:33:53.316Z",
+        "reason": "Claude: static scan can't resolve Tailwind CDN classes; flagged cards all use p-10 (40px) / md:p-14"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "frontend/index.html"
+        ],
+        "createdAt": "2026-10-27T22:33:53.333Z",
+        "reason": "Claude: static scan can't resolve Tailwind CDN classes; h1 is text-5xl/md:text-7xl, h3 text-2xl/3xl over 16px body"
+      }
+    ]
+  }
+}

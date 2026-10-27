@@ -21,4 +21,21 @@ function overlapsBlockedRange(time, blockedRanges) {
   });
 }
 
-module.exports = { APPOINTMENT_DURATION_MINUTES, toMinutes, overlapsBlockedRange };
+// Opening hours as offered on the booking pages (frontend generateTimeSlots): slots every
+// APPOINTMENT_DURATION_MINUTES from 11:00, with the last one ending by 19:00. Slot conflicts are
+// only checked on exact date+time, so an off-grid time sent straight to the API (e.g. 11:10) would
+// overlap the 11:00 appointment without anything noticing — this rejects those.
+const OPENING_MINUTES = 11 * 60;
+const CLOSING_MINUTES = 19 * 60;
+
+function isBookableSlotTime(time) {
+  if (typeof time !== "string" || !/^\d{2}:\d{2}$/.test(time)) return false;
+  const start = toMinutes(time);
+  return (
+    start >= OPENING_MINUTES &&
+    start + APPOINTMENT_DURATION_MINUTES <= CLOSING_MINUTES &&
+    (start - OPENING_MINUTES) % APPOINTMENT_DURATION_MINUTES === 0
+  );
+}
+
+module.exports = { APPOINTMENT_DURATION_MINUTES, toMinutes, overlapsBlockedRange, isBookableSlotTime };
