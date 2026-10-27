@@ -294,6 +294,19 @@
       #langChevron.rotate-180 {
         transform: rotate(180deg);
       }
+
+      /* Hide native play overlay on the background video (iOS Safari) */
+      #hero-video {
+        pointer-events: none;
+      }
+      #hero-video::-webkit-media-controls,
+      #hero-video::-webkit-media-controls-panel,
+      #hero-video::-webkit-media-controls-overlay-play-button,
+      #hero-video::-webkit-media-controls-start-playback-button {
+        display: none !important;
+        -webkit-appearance: none;
+        opacity: 0;
+      }
     </style>
   </head>
   <body class="font-sans antialiased text-white bg-black">
@@ -518,6 +531,8 @@
         loop
         playsinline
         preload="auto"
+        disablepictureinpicture
+        disableremoteplayback
         poster="./image/PrimeCuts_homepage_poster.jpg"
         class="absolute inset-0 w-full h-full object-cover z-0"
       >
@@ -531,6 +546,10 @@
           var play = function () { var p = v.play(); if (p) p.catch(function () {}); };
           play();
           v.addEventListener("canplay", play, { once: true });
+          // If autoplay was blocked (e.g. iOS Low Power Mode), start on first interaction
+          ["touchstart", "click", "scroll"].forEach(function (e) {
+            document.addEventListener(e, function () { if (v.paused) play(); }, { once: true, passive: true });
+          });
         })();
       </script>
 
